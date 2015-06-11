@@ -17,7 +17,7 @@ def get_action(belief_store, rules):
 def get_user_input_beliefs():
   print "beliefs:",
   a = raw_input()
-  return a.split(",")
+  return [token.strip() for token in a.split(",")]
 
 def run(task_call, max_dp, procedures):
   # 1. initialise variables
@@ -52,10 +52,12 @@ def run(task_call, max_dp, procedures):
       LActs = ATheta
 
       # Wait for a BeliefStore update
+      print index
       belief_store = get_user_input_beliefs()
 
       # After update
       index = 1
+      call = task_call
 
       # Check all the active calls (CActs) to see if each previously fired rule instance should continue, beginning with the initial TaskCall entry which has Dp = 1
       # ...
@@ -63,6 +65,7 @@ def run(task_call, max_dp, procedures):
       # Optimisation: We can determine that rule R of Call must continue if (some thing)
     else: # ATheta is a procedure call
       call = ATheta
+      print "called procedure",call
       index += 1
 
   # 3. loop exited, must have reached max call depth
@@ -70,12 +73,32 @@ def run(task_call, max_dp, procedures):
     raise Exception("call-depth-reached")
 
 if __name__ == "__main__":
+  """
   procedures = {"top_call":[(["drunk_tea"], ["()"]),
                             (["tea_water_in_mug"],["drink_tea"]),
                             (["water_in_mug"], ["add_tea"]),
                             (["kettle_boiled"],["pour_water"]),
                             (["kettle_full"],["turn_on_kettle"]),
                             ([],["fill_kettle"])]}
+  """
+  procedures = {"top_call":[(["a","b","c"], ["()"]),
+                            (["b","c"],"do_a"),
+                            (["c"],"do_b"),
+                            ([],"do_c")],
+                "do_a":    [(["a3"], ["()"]),
+                            (["a2"], ["find_a3"]),
+                            (["a1"], ["find_a2"]),
+                            ([], ["find_a1"])],
+                "do_b":    [(["b5"], ["()"]),
+                            (["b4"], ["find_b5"]),
+                            (["b3"], ["find_b4"]),
+                            (["b2"], ["find_b3"]),
+                            (["b1"], ["find_b2"]),
+                            ([], ["find_b1"])],
+                "do_c":    [(["c3"], ["()"]),
+                            (["c2"], ["find_c3"]),
+                            (["c1"], ["find_c2"]),
+                            ([], ["find_c1"])]}
 
   task_call = "top_call"
 

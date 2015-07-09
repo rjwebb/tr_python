@@ -1,9 +1,8 @@
-from pyparsing import Word, alphanums, ZeroOrMore, Suppress, OneOrMore, Group, Optional, lineEnd, nums
+from pyparsing import Literal, Word, alphanums, ZeroOrMore, Suppress, OneOrMore, Group, Optional, lineEnd, nums
 
 # primitive stuff
 term = Word(alphanums + "_" )
 list_of_args = Group(term + ZeroOrMore(Suppress(",") + term))
-
 
 # type definition rules
 range_type = Suppress("(") + Optional("-") + Word(nums) + Suppress(")")
@@ -15,10 +14,10 @@ type_definition = term("head") + Suppress("::=") + Group(range_type("range") | d
 
 single_type_declaration = term("head") + Suppress(":") + Suppress("(") + list_of_args("type") + Suppress(")")
 
-type_declaration = ("percept" | "durative" | "discrete") + single_type_declaration + ZeroOrMore(Suppress(",") + single_type_declaration)
+type_declaration = (Literal("percept") | Literal("durative") | Literal("discrete")) + single_type_declaration + ZeroOrMore(Suppress(",") + single_type_declaration)
 
 # procedure definition rules
-predicate = Group(term("head") + Optional(Suppress("(")+ list_of_args("args") + Suppress(")")))
+predicate = Group(term("head") + Optional(Suppress("(")+ list_of_args("args") + Suppress(")")))("predicate")
 list_of_predicates = Group(predicate + ZeroOrMore(Suppress("&") + predicate))
 
 list_of_actions = Group("()" | predicate + ZeroOrMore(Suppress(",") + predicate))
@@ -26,8 +25,11 @@ list_of_actions = Group("()" | predicate + ZeroOrMore(Suppress(",") + predicate)
 rule = Group(list_of_predicates("conditions") + Suppress("~>") + list_of_actions("actions"))("rule")
 rules = Group(ZeroOrMore(rule))
 procedure = Group(term("name") + Suppress("{") + rules("rules") + Suppress("}"))
+procedures = Group(OneOrMore(procedure))("procedures")
 
-program = Group(OneOrMore(procedure))("procedures")
+type_declarations = Group(ZeroOrMore(type_declaration))("type_decs")
+
+program = type_declarations + procedures
 
 def run():
     test_proc = """get_object{
@@ -51,9 +53,12 @@ see(_, centre)    ~> move(6)
 see(_, Dir)       ~> move(4) , turn(Dir)
 true              ~> turn(left)
 }
-
 """
 
+test_program2 = """durative facing_direction : (num)
+top_task{
+    true ~> turn_left
+}"""
 
 if __name__ == "__main__":
     run()

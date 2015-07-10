@@ -1,0 +1,50 @@
+Abstract syntax tree for TR programs
+
+a program is a dict containing:
+{ "type_declarations" : type_declarations,
+  "procedures" : procedures
+
+the type declarations section is a dict:
+there are two kinds of definitions:
+      what types there are ( type definitions )
+      what things have what types ( type signatures ) this is defined for percepts, beliefs, relations, procedures
+so this section is a dict:
+{ "type_definitions" : list of type definitions,
+  "type_signatures" : list of type signatures }
+
+type definitions. this section is a dict from type names -> type definitions
+types can be:
+  range types = {"sort":"range", "min":number, "max":number}
+  disjunction of atoms = {"sort":"disj_atoms", "values": list of atoms}
+  disjunction of types = {"sort":"disj_types", "values": list of types}
+  product types (tuples) = {"sort":"product_type", "values": list of types} - this allows you to create recursive types
+
+type signatures. this section is a dict from thing names -> types
+types can be:
+  percepts / beliefs = {"sort":"percept" or "belief" or "durative" or "discrete" or whatever, "type": a number of types wrapped in parentheses }
+  relations = {"sort":"relation", "type":same as above }
+the procedures section is a dict mapping from procedure names (strings) -> procedure definitions
+
+
+
+
+the procedures structure is just a dict from procedure names to procedure definitions
+
+procedure definition is a list of rules
+
+rules are dicts of the form:
+{ "conds": list of conditions,
+  "actions": list of actions }
+
+a condition is a predicate (an atom is a predicate with no terms) of the form:
+{ "sort":"predicate", "name":string, "terms": list of predicates and variables }
+
+or it's a condition like X == 10??
+{ "sort":"bincond", "operator":something, "lhs":variable or something like that, "rhs":a value or another variable}
+
+
+variables:
+{"name":string, "sort":"variable"}
+
+value:
+{"sort":"value", "value":something}

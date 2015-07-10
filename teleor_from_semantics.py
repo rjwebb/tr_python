@@ -246,9 +246,6 @@ def procedure_from_ast(ast):
 if __name__ == "__main__":
   parsed_program = dsl.program.parseString(test_program2)
 
- # program_l = parsed_program.asList()
-#  print program_l
-
   task_call = "top_call"
   program = program_from_ast(parsed_program)
   run(task_call, 10, program, use_pedro=True)

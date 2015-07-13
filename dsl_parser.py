@@ -7,7 +7,8 @@ list_of_args = Group(term + ZeroOrMore(Suppress(",") + term))
 # type definition rules
 integer = Group( Optional("-")("sign") + Word(nums)("num"))
 
-range_type = Group(Suppress("(") + integer("min") + Suppress("..") + integer("max") + Suppress(")"))
+#range_type = Group(Suppress("(") + integer("min") + Suppress("..") + integer("max") + Suppress(")"))
+range_type = Suppress("(") + integer("min") + Suppress("..") + integer("max") + Suppress(")")
 disjunction_of_atoms = Group(term("atom") + Suppress("|") + term("atom") + ZeroOrMore(Suppress("|") + term("atom")))
 disjunction_of_types = Group(term("type") + Suppress("||") + term("type") + ZeroOrMore(Suppress("||") + term("type")))
 
@@ -43,23 +44,23 @@ def program_from_ast(ast):
     if "type_def_name" in a.keys():
       type_definition_asts.append(a)
     elif "percept_type" in a.keys():
-      type_definition_asts.append(a)
+      type_signature_asts.append(a)
     elif "procedure_name" in a.keys():
       procedure_asts.append(a)
   
-  print "type defs:",[k.asList() for k in type_definition_asts]
-  print "type sigs:",[k.asList() for k in type_signature_asts]
-  print "procs:",[k.asList() for k in procedure_asts]
+#  print "type defs:",[k.asList() for k in type_definition_asts]
+#  print "type sigs:",[k.asList() for k in type_signature_asts]
+#  print "procs:",[k.asList() for k in procedure_asts]
 
-def sfsdjfkds():
-  types = types_from_ast(ast['type_info'])
+  type_definitions = type_definitions_from_ast(type_definition_asts)
+  type_signatures = type_signatures_from_ast(type_signature_asts)
 
   procedures = {}
-  for proc in ast["procedures"]:
-    name = proc["name"]
+  for proc in procedure_asts:
+    name = proc["procedure_name"]
     procedures[name] = procedure_from_ast(proc["rules"])
 
-  return { "types" : types, "procedures" : procedures }
+  return { "type_definitions" : type_definitions, "type_signatures" : type_signatures, "procedures" : procedures }
 
 
 def types_from_ast(ast):
@@ -69,14 +70,35 @@ def types_from_ast(ast):
 
 
 def type_definitions_from_ast(ast):
+  type_defs = []
+  for item in ast:
+    name = item['type_def_name']
+    k = item.keys()
+    if "disj_types" in k:
+      e = {"name": name, "sort": "disj_types", "types": item['disj_types'].asList() }
+    elif "disj_atoms" in k:
+      e = {"name": name, "sort": "disj_atoms", "atoms": item['disj_atoms'].asList() }
+    elif 'range' in k:
+      minimum = integer_from_ast(item['range']['min'])
+      maximum = integer_from_ast(item['range']['max'])
+      e = {"name": name, "sort": "range", "min": minimum, "max": maximum }
+    else:
+      raise Exception("type definition is invalid!")
+    type_defs.append(e)
+  return type_defs
 
-  return {}
+def integer_from_ast(ast):
+  n = int(ast['num'])
+  if 'sign' in ast.keys():
+    if ast['sign'] == "-":
+      n = -n
+  return n
 
 def type_signatures_from_ast(ast):
   sigs = {}
   for a in ast:
     for e in a['type_decs']:
-      print e['head'], "is a", a['percept_type'], "with type", e['type']
+#      print e['head'], "is a", a['percept_type'], "with type", e['type']
       if e['head'] in sigs:
         raise Exception("variable " + e['head'] + "'s type is defined twice!!")
       else:

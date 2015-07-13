@@ -11,17 +11,14 @@ range_type = Group(Suppress("(") + integer("min") + Suppress("..") + integer("ma
 disjunction_of_atoms = Group(term("atom") + Suppress("|") + term("atom") + ZeroOrMore(Suppress("|") + term("atom")))
 disjunction_of_types = Group(term("type") + Suppress("||") + term("type") + ZeroOrMore(Suppress("||") + term("type")))
 
-type_definition = term("head") + Suppress("::=") + (range_type("range") | disjunction_of_types("disj_types") | disjunction_of_atoms("disj_atoms"))
-
-type_definitions = ZeroOrMore( Group(type_definition("definition")) )
+type_definition = Group(term("type_def_name") + Suppress("::=") + (range_type("range") | disjunction_of_types("disj_types") | disjunction_of_atoms("disj_atoms")))
 
 
 # type signature rules
 single_type_declaration = Group(term("head") + Suppress(":") + Suppress("(") + list_of_args("type") + Suppress(")"))
 list_of_type_decs = single_type_declaration("type_dec") + ZeroOrMore(Suppress(",") + single_type_declaration("type_dec"))
 percept_type = (Literal("percept") | Literal("durative") | Literal("discrete"))
-type_signatures = ZeroOrMore(Group(percept_type("percept_type")  + Group(list_of_type_decs)("type_decs"))("signature"))("type_signatures")
-
+type_signature = Group(percept_type("percept_type")  + Group(list_of_type_decs)("type_decs"))
 
 # procedure definition rules
 predicate = Group(term("head") + Optional(Suppress("(")+ list_of_args("args") + Suppress(")")))("predicate")
@@ -30,14 +27,31 @@ list_of_predicates = Group(predicate + ZeroOrMore(Suppress("&") + predicate))
 list_of_actions = Group("()" | predicate + ZeroOrMore(Suppress(",") + predicate))
 
 rule = Group(list_of_predicates("conditions") + Suppress("~>") + list_of_actions("actions"))("rule")
-rules = Group(ZeroOrMore(rule))
-procedure = Group(term("name") + Suppress("{") + rules("rules") + Suppress("}"))
-procedures = Group(OneOrMore(procedure))("procedures")
+rules = Group(OneOrMore(rule))
+procedure = Group(term("procedure_name") + Suppress("{") + rules("rules") + Suppress("}"))
 
-program = type_signatures + procedures
+program_item = type_definition("type_definition") | type_signature("type_signature") | procedure("procedure")
 
+program = OneOrMore(program_item)("program")
 
 def program_from_ast(ast):
+  type_definition_asts = []
+  type_signature_asts = []
+  procedure_asts = []
+
+  for a in ast:
+    if "type_def_name" in a.keys():
+      type_definition_asts.append(a)
+    elif "percept_type" in a.keys():
+      type_definition_asts.append(a)
+    elif "procedure_name" in a.keys():
+      procedure_asts.append(a)
+  
+  print "type defs:",[k.asList() for k in type_definition_asts]
+  print "type sigs:",[k.asList() for k in type_signature_asts]
+  print "procs:",[k.asList() for k in procedure_asts]
+
+def sfsdjfkds():
   types = types_from_ast(ast['type_info'])
 
   procedures = {}
@@ -134,6 +148,34 @@ test_program2 = """durative facing_direction : (num)
 top_task{
     true ~> turn_left
 }"""
+
+test_program3 = """arm ::= arm1 | arm2
+table ::= table1 | shared | table2
+block ::= (1 .. 16)
+place ::= table || block
+
+percept
+  holding : (arm, block),
+  on : (block, place)
+
+durative
+  move : (num)
+
+get_object{
+holding & see(0,centre) ~> ()
+holding & see(0,centre) ~> grab(100)
+holding ~> get_to
+true ~> release(1)
+}
+
+get_to {
+see(0, centre)    ~> ()
+see(0, Dir)       ~> turn(Dir)
+see(_, centre)    ~> move(6)
+see(_, Dir)       ~> move(4) , turn(Dir)
+true              ~> turn(left)
+}
+"""
 
 test_typedef = """arm ::= arm1 | arm2
 table ::= table1 | shared | table2

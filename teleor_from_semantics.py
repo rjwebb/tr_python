@@ -2,89 +2,42 @@
 # -*- coding: utf-8 -*-
 
 import dsl_parser as dsl
+import beliefstore as bs
 import pedroclient
-
-
-# TEST DATA
-
-"""
-procedures = {"top_call":[(["drunk_tea"], ["()"]),
-                            (["tea_water_in_mug"],["drink_tea"]),
-                            (["water_in_mug"], ["add_tea"]),
-                            (["kettle_boiled"],["pour_water"]),
-                            (["kettle_full"],["turn_on_kettle"]),
-                            ([],["fill_kettle"])]}
-"""
-"""procedures = {"top_call":[(["a","b","c"], ["()"]),
-                            (["b","c"],"do_a"),
-                            (["c"],"do_b"),
-                            ([],"do_c")],
-                "do_a":    [(["a3"], ["()"]),
-                            (["a2"], ["find_a3"]),
-                            (["a1"], ["find_a2"]),
-                            ([], ["find_a1"])],
-                "do_b":    [(["b5"], ["()"]),
-                            (["b4"], ["find_b5"]),
-                            (["b3"], ["find_b4"]),
-                            (["b2"], ["find_b3"]),
-                            (["b1"], ["find_b2"]),
-                            ([], ["find_b1"])],
-                "do_c":    [(["c3"], ["()"]),
-                            (["c2"], ["find_c3"]),
-                            (["c1"], ["find_c2"]),
-                            ([], ["find_c1"])]}
-"""
-
-test_program = """top_call{
-a & b & c ~> ()
-b & c ~> do_a
-c ~> do_b
-true ~> do_c
-}
-do_a{
-a3 ~> ()
-a2 ~> find_a3
-a1 ~> find_a2
-true ~> find_a1
-}
-do_b{
-b5 ~> ()
-b4 ~> find_b5
-b3 ~> find_b4
-b2 ~> find_b3
-b1 ~> find_b2
-true ~> find_b1
-}
-do_c{
-c3 ~> ()
-c2 ~> find_c3
-c1 ~> find_c2
-true ~> find_c1
-}
-"""
-test_program2 = """top_call{
-facing_direction(X) & bleh(jshdjsd)~> turn_right
-true ~> turn_left
-}"""
-
-
-# ACTUAL PROGRAM
+import pdb
+import test_data
 
 def apply_substitution(A, Theta):
-  return A
+  out = []
+  for a in A:
+    out.append(predicate_to_string(A[0]))
+  return out
 
 def send_message(client, addr, percept_text):
-    if addr is None:
-        print "No agent connected"
-        pass
+  if addr is None:
+    print "No agent connected"
+    pass
+  else:
+    # send percepts
+    if client.p2p(addr, percept_text) == 0:
+      print "Illegal percepts message"
+
+def predicate_to_string(pred):
+  if pred["sort"] == "predicate" or pred["sort"] == "action":
+    if len(pred["terms"]) == 0:
+      out = pred["name"]
     else:
-        # send percepts
-        if client.p2p(addr, percept_text) == 0:
-            print "Illegal percepts message"
+      out = pred['name'] + "(" + ",".join([predicate_to_string(p) for p in pred['terms']]) + ")"
+  elif pred["sort"] == "variable":
+    out = pred["name"]
+  elif pred["sort"] == "value":
+    out = pred["value"]
+  else:
+    raise Exception("not sure what this is: " + str(pred))
+  return out
 
 def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
   cmds = []
-  print LActs, CActs
   if use_pedro:
     for a in LActs:
       if a not in CActs:
@@ -96,37 +49,42 @@ def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
     if len(cmds) > 0:
       cmd = "controls(["+",".join(cmds)+"])"
       print cmd
-
       send_message(client, server_name, cmd)
 
 
-def get_action(belief_store, rules):
-  for i,(conds, action) in enumerate(rules):
-    conds_in_belief_store = [(c in belief_store or c == "true") for c in conds]
-    if all(conds_in_belief_store):
-      return i
-  raise Exception("no-firable-rule")
-
 def eval_cond(cond, belief_store):
   # condition is an atom
-  if len(cond) == 1:
-    return cond[0] in belief_store
+  if cond['sort'] == 'predicate':
+    if cond['name'] == 'true':
+      return True,[] # success, no instantiations
+    else:
+      print "evaluating:", cond['name'], cond['terms']
+
+      for e in belief_store:
+        success, output = bs.pattern_match(cond, e, {})
+        if success:
+          return success, output
+      return False, None
   else:
-    print type(cond)
-    print cond, belief_store
-    return False
+    # this is where i would put rules for stuff like comparisons, haven't done this yet though! lol
+    return False, None
 
-def get_action_2(belief_store, rules):
-  print rules
-  print "hdjgfhjdskf"
-  for i, (conds, action) in enumerate(rules):
-    print i
-    print conds
-    if "true" in conds or \
-       all([eval_cond(cond, belief_store) for cond in conds]):
-      return i
 
+def get_action(belief_store, rules):
+  for i, rule in enumerate(rules):
+    satisfied = True
+    for cond in rule['conds']:
+      success, output = eval_cond(cond, belief_store)
+      if not success:
+        print "fail"
+        satisfied = False
+      else:
+        print output
+
+    if satisfied:
+      return i, {}
   raise Exception("no-firable-rule")
+
 
 def get_user_input_beliefs():
   print "beliefs:",
@@ -144,9 +102,33 @@ def get_beliefs_from_server(client):
   message = p2pmsg.args[2]
   beliefs = message.toList()
 
-  return beliefs
+  output = munge_beliefs_from_server(beliefs)
+  return output
 
-def run(task_call, max_dp, procedures, use_pedro=False):
+def pedro_predicate_to_dict(pred):
+  ptype = type(pred)
+  if ptype == pedroclient.PStruct:
+    children = [pedro_predicate_to_dict(p) for p in pred.args]
+    return {"name" : pred.functor.val, "terms" : children, "sort" : "predicate" }
+  elif ptype == pedroclient.PAtom:
+    return {"name" : pred.val, "terms" : [], "sort" : "predicate"}
+  else:
+    if ptype == pedroclient.PInteger:
+      t = "integer"
+    elif ptype == pedroclient.PFloat:
+      t = "float"
+    elif ptype == pedroclient.PString:
+      t = "string"
+    else:
+      raise Exception(str(pred) + "is of unrecognised type!")
+    return {"sort" : "value", "value" : pred.val, "type" : t}
+
+def munge_beliefs_from_server(beliefs):
+  return [pedro_predicate_to_dict(b) for b in beliefs]
+
+def run(task_call, max_dp, program, use_pedro=False):
+  procedures = program['procedures']
+
   # 1. initialise variables
   LActs = {}
   FrdRules = {}
@@ -165,22 +147,25 @@ def run(task_call, max_dp, procedures, use_pedro=False):
   if use_pedro:
     belief_store = get_beliefs_from_server(client)
   else:
-    belief_store = get_user_input_beliefs() + ["true"]
+    belief_store = get_user_input_beliefs()
 
 
   # 2. if call depth maximum reached
   while index <= max_dp:
     # 3. Evaluate the guards for the rules for Call in turn,
     # to find the first rule with an inferable guard
+    print call
     rules = procedures[call]
 
     print index
-    R = get_action_2(belief_store, rules)
-
-    K, A = rules[R]
+    R, Theta = get_action(belief_store, rules)
+    print rules
+    applied_rule = rules[R]
+    A = applied_rule['actions']
     Theta = {} # not implemented unification yet
 
     ATheta = apply_substitution(A, Theta)
+#    ATheta = A
     if type(ATheta) is list:
       # Compute controls CActs using actions of ATheta and Acts
       CActs = ATheta
@@ -196,7 +181,7 @@ def run(task_call, max_dp, procedures, use_pedro=False):
       if use_pedro:
         belief_store = get_beliefs_from_server(client)
       else:
-        belief_store = get_user_input_beliefs() + ["true"]
+        belief_store = get_user_input_beliefs() 
 
       # After update
       index = 1
@@ -218,34 +203,9 @@ def run(task_call, max_dp, procedures, use_pedro=False):
   if index > max_dp:
     raise Exception("call-depth-reached")
 
-def program_from_ast(ast):
-  procedures = {}
-  for proc in ast["procedures"]:
-    procedures[proc["name"]] = procedure_from_ast(proc["rules"])
-  return procedures
-
-def procedure_from_ast(ast):
-  rules = []
-  for conds, actions in ast:
-    p_conds = []
-    for cond in conds:
-      p_conds.extend(cond)
-
-
-    p_actions = []
-    print actions
-    for action in actions:
-      if type(action) is str:
-        p_actions.append(action)
-      else:
-        p_actions.append(action.asList()[0])
-
-    rules.append( (p_conds, p_actions) )
-  return rules
-
 if __name__ == "__main__":
-  parsed_program = dsl.program.parseString(test_program2)
+  parsed_program = dsl.program.parseString(test_data.test_program2)
 
   task_call = "top_call"
-  program = program_from_ast(parsed_program)
+  program = dsl.program_from_ast(parsed_program)
   run(task_call, 10, program, use_pedro=True)

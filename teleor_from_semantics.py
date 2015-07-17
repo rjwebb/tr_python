@@ -7,6 +7,16 @@ import pedroclient
 import pdb
 import test_data
 
+def merge_dicts(*dict_args):
+  '''
+  Given any number of dicts, shallow copy and merge into a new dict,
+  precedence goes to key value pairs in latter dicts.
+  '''
+  result = {}
+  for dictionary in dict_args:
+    result.update(dictionary)
+  return result
+
 def apply_substitution(A, Theta):
   out = []
   for a in A:
@@ -52,27 +62,59 @@ def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
       send_message(client, server_name, cmd)
 
 
-def eval_cond(cond, belief_store):
+def eval_cond(cond, belief_store, variables):
   # condition is an atom
   if cond['sort'] == 'predicate':
     if cond['name'] == 'true':
-      return True,[] # success, no instantiations
+      return True, {} # success, no instantiations
     else:
       print "evaluating:", cond['name'], cond['terms']
 
+      substitutions = []
+
       for e in belief_store:
-        success, output = bs.pattern_match(cond, e, {})
+        success, output = bs.pattern_match(cond, e, variables)
         if success:
-          return success, output
-      return False, None
+          substitutions.append(output)
+          #return success, output
+
+      if len(substitutions) > 0:
+        return True, substitutions
+      else:
+        return False, None
   else:
     # this is where i would put rules for stuff like comparisons, haven't done this yet though! lol
     return False, None
 
+def eval_conds(conds, belief_store, variables):
+  if conds == []:
+    return True, variables
+  else:
+    cond = conds[0]
+    success, substitutions = eval_cond(cond, belief_store, variables)
+    print success, substitutions
+
+    if success:
+      i = 0
+      done = False
+      while i < len(substitutions) and not done:
+        updated_variables = merge_dicts(variables, substitutions[i])
+        success2, variables2 = eval_conds(conds[1:], belief_store, updated_variables)
+        if success2:
+          done = True
+        i += 1
+      if done:
+        return True, variables2
+    else:
+      return False, None
+
 
 def get_action(belief_store, rules):
   for i, rule in enumerate(rules):
-    satisfied = True
+    success, output = eval_conds(rule['conds'], belief_store, {})
+    if success:
+      return i, output
+  """    satisfied = True
     for cond in rule['conds']:
       success, output = eval_cond(cond, belief_store)
       if not success:
@@ -82,7 +124,8 @@ def get_action(belief_store, rules):
         print output
 
     if satisfied:
-      return i, {}
+      return i, {}"""
+
   raise Exception("no-firable-rule")
 
 
@@ -181,13 +224,13 @@ def run(task_call, max_dp, program, use_pedro=False):
       if use_pedro:
         belief_store = get_beliefs_from_server(client)
       else:
-        belief_store = get_user_input_beliefs() 
+        belief_store = get_user_input_beliefs()
 
       # After update
       index = 1
       call = task_call
 
-      # Check all the active calls (CActs) to see if each previously 
+      # Check all the active calls (CActs) to see if each previously
       #fired rule instance should continue,
       #beginning with the initial TaskCall entry which has Dp = 1
       # doesn't this only apply to Nilsson's TR semantics??

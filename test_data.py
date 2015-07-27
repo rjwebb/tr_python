@@ -63,6 +63,8 @@ facing_direction(X) ~> turn_right
 true ~> turn_left
 }"""
 
+
+
 test_program3 = """
 durative turn_right : (num),
          turn_left : (num)
@@ -146,6 +148,48 @@ true              ~> turn(left)
 }
 """
 
+test_program8 = """
+durative turn_right : (num),
+         turn_left : (num)
+
+discrete shoot : (num)
+
+percept facing_direction : (num),
+        see : (string, num)
+
+top_call{
+facing_direction(X) & X > 3.14 ~> turn_right
+facing_direction(X) & X <= 3.14 ~> turn_left
+true ~> shoot
+}"""
+
+test_program9 = """
+durative turn_left : (),
+         turn_right : (),
+         move_forward : (num),
+         proceed : (direction)
+
+discrete explode : (),
+         pick_up : (thing)
+
+percept see : (thing, direction)
+
+thing ::= box | shoe
+direction ::= hither | thither | yonder
+
+top_call : (thing, direction) ~>
+top_call(Arg1, Arg2){
+  see(Arg1, hither) ~> pick_up(Arg1)
+  see(Arg1, thither) ~> proceed(thither)
+  true ~> wander_about(Arg2)
+}
+
+wander_about : (direction) ~>
+wander_about(X){
+  true ~> turn_left, move_forward(0.3)
+}
+"""
+
 test_typedef = """arm ::= arm1 | arm2
 table ::= table1 | shared | table2
 block ::= (1 .. 16)
@@ -164,27 +208,57 @@ durative
 
 v1 = {"sort":"variable", "name":"A"}
 v2 = {"sort":"variable", "name":"B"}
-v3 = {"sort":"variable", "name":"Objective"}
-v4 = {"sort":"variable", "name":"Synergy"}
+v3 = {"sort":"variable", "name":"C"}
+v4 = {"sort":"variable", "name":"D"}
 
 
-p1 = {"sort":"predicate", "terms":[], "name":"foo"}
+pg1 = {"sort":"predicate", "terms":[], "name":"foo"}
 
-p2 = {"sort":"predicate", "terms":[], "name":"bar"}
+pg2 = {"sort":"predicate", "terms":[], "name":"bar"}
 
-p3 = {"sort":"predicate", "terms":[ {"sort":"predicate", "terms":[], "name":"baz"} ], "name":"foo"}
+pg3 = {"sort":"predicate", "terms":[ {"sort":"predicate", "terms":[], "name":"baz"} ], "name":"foo"}
 
-p4 = {"sort":"predicate", "terms":[ {"sort":"predicate", "terms":[], "name":"qux"} ], "name":"foo"}
+pg4 = {"sort":"predicate", "terms":[ {"sort":"predicate", "terms":[], "name":"qux"} ], "name":"foo"}
 
-p5 = {"sort":"predicate", "terms":[ v1 ], "name":"foo"}
+pg5 = {"sort":"predicate", "terms":[ pg2 ], "name":"foo"}
 
-p6 = {"sort":"predicate", "terms":[ p2 ], "name":"foo"}
+pg6 = {"sort":"predicate", "terms":[ pg1, pg2 ], "name":"blurp"}
 
-p7 = {"sort":"predicate", "terms":[ v1, v2 ], "name":"blurp"}
+pg7 = {"sort":"predicate", "terms":[ pg1, pg1 ], "name":"blurp"}
 
-p8 = {"sort":"predicate", "terms":[ p1, p2 ], "name":"blurp"}
+pg8 = {"sort":"predicate", "terms":[ pg6, pg7 ], "name":"blurp"}
 
-p9 = {"sort":"predicate", "terms":[ v1, v1 ], "name":"blurp"}
+pg9 = {"sort":"predicate", "terms":[ pg1, pg7, pg3 ], "name":"blurp"}
 
-p10 = {"sort":"predicate", "terms":[ p1, p1 ], "name":"blurp"}
 
+pv1 = {"sort":"predicate", "terms":[ v1 ], "name":"foo"}
+
+pv2 = {"sort":"predicate", "terms":[ v1, v2 ], "name":"blurp"}
+
+pv3 = {"sort":"predicate", "terms":[ v1, v1 ], "name":"blurp"}
+
+pv4 = {"sort":"predicate", "terms":[ pg1, v3, pg3], "name":"foo"}
+
+pv5 = {"sort":"predicate", "terms":[ pg1, v3, v4], "name":"foo"}
+
+
+ground_preds = [pg1, pg2, pg3, pg4, pg5, pg6, pg7, pg8, pg9]
+variable_preds = [pv1, pv2, pv3, pv4, pv5]
+variables = [v1, v2, v3, v4]
+
+test_programs = [test_program, test_program2, test_program3, test_program4, test_program5, test_program6, test_program7, test_program8, test_program9]
+
+
+def format_data(pred):
+  if pred["sort"] == "predicate" or pred["sort"] == "action":
+    if len(pred["terms"]) == 0:
+      out = pred["name"]
+    else:
+      out = pred['name'] + "(" + ",".join([predicate_to_string(p) for p in pred['terms']]) + ")"
+  elif pred["sort"] == "variable":
+    out = pred["name"]
+  elif pred["sort"] == "value":
+    out = pred["value"]
+  else:
+    raise Exception("not sure what this is: " + str(pred))
+  return out

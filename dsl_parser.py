@@ -1,34 +1,39 @@
-from pyparsing import Literal, Word, alphanums, ZeroOrMore, Suppress, OneOrMore, Group, Optional, lineEnd, nums, Forward, delimitedList, Regex, QuotedString
+from pyparsing import Literal, Word, alphanums, ZeroOrMore, Suppress, OneOrMore, Group, Optional, lineEnd, nums, Forward, delimitedList, Regex, QuotedString, infixNotation, opAssoc, oneOf
 import pdb
+import copy
 
-# primitive stuff
-varName = Group(Regex("[A-Z][A-Za-z_]*")("variable"))
+# basic syntax things
+varName = Group(Regex("[A-Z][A-Za-z0-9_]*")("variable"))
 lcName = Regex("[a-z_][A-Za-z_]*")
 term = Word(alphanums + "_" )
 
-#term = Word(alphanums + "_" )
-#list_of_args = Group(term + ZeroOrMore(Suppress(",") + term))
 list_of_args = Group(delimitedList(term, delim=","))
 
-# type definition rules
+# primitive types
 integer = Group( Optional("-")("sign") + Word(nums)("num"))
-#float_num = Group( Optional("-")("sign") + Regex(r'\d+(\.\d*)?([eE]\d+)?')("num") )
 float_num = Group( Optional("-")("sign") + Regex(r'\d+(\.\d*)([eE]\d+)?')("num") )
 
-#range_type = Group(Suppress("(") + integer("min") + Suppress("..") + integer("max") + Suppress(")"))
-range_type = Suppress("(") + integer("min") + Suppress("..") + integer("max") + Suppress(")")
-#disjunction_of_atoms = Group(term("atom") + Suppress("|") + term("atom") + ZeroOrMore(Suppress("|") + term("atom")))
-disjunction_of_atoms = Group(term("atom") + Suppress("|") + delimitedList(term("atom"), delim=r"|") )
+# rules for parsing expressions
+binary_comparison = Literal(">=") | Literal(">") | Literal("==") | Literal("<=") | Literal("<")
 
-#disjunction_of_types = Group(term("type") + Suppress("||") + term("type") + ZeroOrMore(Suppress("||") + term("type")))
+simple_expression = varName | Group(float_num("float")) | Group(integer("integer"))
+expression = infixNotation(simple_expression,
+                           [
+                             (oneOf("* /"), 2, opAssoc.LEFT),
+                             (oneOf("+ -"), 2, opAssoc.LEFT)
+                           ])
+
+# type definition rules
+range_type = Suppress("(") + integer("min") + Suppress("..") + integer("max") + Suppress(")")
+disjunction_of_atoms = Group(term("atom") + Suppress("|") + delimitedList(term("atom"), delim=r"|") )
 disjunction_of_types = Group(term("type") + Suppress("||") + delimitedList(term("type"), delim=r"||") )
 
 type_definition = Group(term("type_def_name") + Suppress("::=") + (range_type("range") | disjunction_of_atoms("disj_atoms") | disjunction_of_types("disj_types")))
 
 # type signature rules
-single_type_declaration = Group(term("head") + Suppress(":") + Suppress("(") + list_of_args("type") + Suppress(")"))
-#list_of_type_decs = single_type_declaration("type_dec") + ZeroOrMore(Suppress(",") + single_type_declaration("type_dec"))
+single_type_declaration = Group(term("head") + Suppress(":") + Suppress("(") + Optional(list_of_args("type")) + Suppress(")"))
 list_of_type_decs = delimitedList(single_type_declaration("type_dec"), delim=",")
+
 percept_type = (Literal("percept") | Literal("durative") | Literal("discrete"))
 type_signature = Group(percept_type("percept_type")  + Group(list_of_type_decs)("type_decs"))
 
@@ -36,17 +41,20 @@ type_signature = Group(percept_type("percept_type")  + Group(list_of_type_decs)(
 predicate = Forward()
 predicate << ( Group(lcName("head") + Optional(Suppress("(")+ Group(delimitedList(predicate))('args') + Suppress(")")))("predicate") | varName | Group(float_num("float")) | Group(integer("integer")) | Group(QuotedString("\"")("string")) )
 
-#list_of_conditions = Group(predicate + ZeroOrMore(Suppress("&") + predicate))
-list_of_conditions = Group(delimitedList(predicate, delim="&"))
+binary_condition = Group(expression("arg1") + binary_comparison("operator") + expression("arg2"))
 
-#list_of_actions = Group("()" | predicate + ZeroOrMore(Suppress(",") + predicate))
+list_of_conditions = Group(delimitedList(( binary_condition | predicate ), delim="&"))
 list_of_actions = Group("()" | delimitedList(predicate, delim=","))
 
 rule = Group(list_of_conditions("conditions") + Suppress("~>") + list_of_actions("actions"))("rule")
 rules = Group(OneOrMore(rule))
-procedure = Group(term("procedure_name") + Suppress("{") + rules("rules") + Suppress("}"))
 
-program_item = type_definition("type_definition") | type_signature("type_signature") | procedure("procedure")
+procedure_params = Suppress("(") + Group(delimitedList(varName))("parameters") + Suppress(")")
+procedure = Group(term("procedure_name") + Optional( procedure_params ) + Suppress("{") + rules("rules") + Suppress("}"))
+
+procedure_type_signature = Group(term("procedure_name") + Suppress(":") + Suppress("(") + Optional(Group(delimitedList(term))("type")) + Suppress(")") + Suppress("~>") )
+
+program_item = type_definition("type_definition") | type_signature("type_signature") | procedure("procedure") | procedure_type_signature("procedure_type_signature")
 
 program = OneOrMore(program_item)("program")
 
@@ -54,20 +62,24 @@ def program_from_ast(ast):
   type_definition_asts = []
   type_signature_asts = []
   procedure_asts = []
+  procedure_sig_asts = []
 
   for a in ast:
     if "type_def_name" in a.keys():
       type_definition_asts.append(a)
     elif "percept_type" in a.keys():
       type_signature_asts.append(a)
-    elif "procedure_name" in a.keys():
+    elif "rules" in a.keys():
       procedure_asts.append(a)
-  
+    elif "procedure_name" in a.keys():
+      procedure_sig_asts.append(a)
+
   procedure_names = [k['procedure_name'] for k in procedure_asts]
   print "procedure names:", procedure_names
 
   type_definitions = type_definitions_from_ast(type_definition_asts)
   type_signatures = type_signatures_from_ast(type_signature_asts)
+  procedure_signatures = procedure_signatures_from_ast(procedure_sig_asts)
 
   action_names = []
   percept_names = []
@@ -79,19 +91,49 @@ def program_from_ast(ast):
     elif action['percept_type'] == 'percept': # is a percept
       percept_names.append(n)
     else:
-      raise Exception("unrecognised percept type?????????")
-#  action_names = [name for name, action in enumerate(type_signatures) if action['percept_type'] == 'durative' or action['percept_type'] == 'discrete']
+      raise Exception("unrecognised percept type for " + str(n))
 
-  print "actions",action_names
-  print "percepts", percept_names
+
+  print "actions:",action_names
+  print "percepts:", percept_names
 
   procedures = {}
   for proc in procedure_asts:
+    """
     name = proc["procedure_name"]
-    procedures[name] = procedure_from_ast(proc["rules"], procedure_names, action_names, percept_names)
 
-  return { "type_definitions" : type_definitions, "type_signatures" : type_signatures, "procedures" : procedures }
+    rules = procedure_from_ast(proc["rules"], procedure_names, action_names, percept_names)
+    if "parameters" in proc:
+      parameters = procedure_parameters_from_ast(proc["parameters"])
+    else:
+      parameters = []
 
+    input_types = procedure_signatures[name]
+
+    if len(input_types) != len(parameters):
+      print input_types, parameters
+      raise Exception("the type signature and the definition for " + name + " have different numbers of terms!")
+    else:
+      for p, t in zip(parameters, input_types):
+        p['type'] = t
+
+    procedures[name] = {"name" : name,
+                        "rules" : rules,
+                        "parameters" : parameters}
+    """
+    name = proc["procedure_name"]
+    procedure_signature = procedure_signatures[name]
+    procedures[name] = procedure_from_ast(proc, procedure_signature, procedure_names, action_names, percept_names)
+  return { "type_definitions" : type_definitions,
+           "type_signatures" : type_signatures,
+           "procedures" : procedures}
+
+def procedure_parameters_from_ast(ast):
+  output = []
+  for a in ast:
+    paramName = str(a["variable"])
+    output.append( { "name" : paramName, "sort" : "variable" } )
+  return output
 
 def types_from_ast(ast):
   type_defs = type_definitions_from_ast(ast)
@@ -124,30 +166,69 @@ def integer_from_ast(ast):
       n = -n
   return n
 
+def float_from_ast(ast):
+  n = float(ast['num'])
+  if 'sign' in ast.keys():
+    if ast['sign'] == "-":
+      n = -n
+  return n
+
+
 def type_signatures_from_ast(ast):
   sigs = {}
   for a in ast:
     for e in a['type_decs']:
-#      print e['head'], "is a", a['percept_type'], "with type", e['type']
       if e['head'] in sigs:
         raise Exception("variable " + e['head'] + "'s type is defined twice!!")
       else:
-        sigs[ e['head'] ] = { 'percept_type': a['percept_type'], 'type': e['type'].asList() }
+        if 'type' in e:
+          # the percept is a predicate
+          t = e['type'].asList()
+        else:
+          # the percept is an atom
+          t = []
+        sigs[ e['head'] ] = { 'percept_type': a['percept_type'], 'type': t}
   return sigs
 
-def procedure_from_ast(ast, procedure_names, action_names, percept_names):
-  return [rule_from_ast(rule, procedure_names, action_names, percept_names) for rule in ast]
+def procedure_from_ast(procedure_ast, input_types, procedure_names, action_names, percept_names):
+  name = procedure_ast["procedure_name"]
+
+  rules = []
+  for rule in procedure_ast["rules"]:
+    r = rule_from_ast(rule, procedure_names, action_names, percept_names)
+    rules.append(r)
+
+  try:
+    parameters = procedure_parameters_from_ast(procedure_ast["parameters"])
+  except KeyError:
+    parameters = []
+
+  if len(input_types) != len(parameters):
+    print input_types, parameters
+    raise Exception("the type signature and the definition for " + name + " have different numbers of terms!")
+  else:
+    parameters_with_types = []
+    for p, t in zip(parameters, input_types):
+      p_t = copy.copy(p)
+      p_t["type"] = t
+      parameters_with_types.append(p_t)
+
+    return {"name" : name,
+            "rules" : rules,
+            "parameters" : parameters_with_types}
 
 def rule_from_ast(ast, procedure_names, action_names, percept_names):
   conds = [cond_from_ast(cond) for cond in ast['conditions']]
-
   actions = [action_from_ast(action,procedure_names,action_names) for action in ast['actions']]
-
   return { "conds" : conds, "actions" : actions }
 
 def cond_from_ast(ast):
   if "head" in ast.keys(): #it is a predicate
     return predicate_from_ast(ast)
+  elif "operator" in ast:
+    arg1 = expression_from_ast(ast["arg1"])
+    arg2 = expression_from_ast(ast["arg2"])
+    return {"sort":"binary_condition", "operator":ast["operator"], "arg1":arg1, "arg2":arg2}
   else:
     return {"error":"not a predicate"}
 
@@ -175,19 +256,45 @@ def predicate_from_ast(ast):
     args = []
   return { "sort" : "predicate", "name" : ast["head"], "terms" : args }
 
+def expression_from_ast(ast):
+  if len(ast) == 1:
+    return param_from_ast(ast)
+  else:
+    left = expression_from_ast(ast[0])
+    operator = ast[1]
+    right = expression_from_ast(ast[2])
+    return {"sort" : "binary_operation", "operator" : operator, "left" : left, "right" : right }
+
 def param_from_ast(ast):
   if type(ast) == str:
-    return {"sort":"value", "value":ast, "type": "string"}
+    return {"sort":"value", "value":ast, "type": "atom"}
   elif "integer" in ast:
-    return {"sort":"value", "value":ast["integer"], "type": "integer"}
+    return {"sort":"value", "value":integer_from_ast(ast["integer"]), "type": "integer"}
   elif "float" in ast:
-    return {"sort":"value", "value":ast["float"], "type": "float"}
+    return {"sort":"value", "value":float_from_ast(ast["float"]), "type": "float"}
   elif "string" in ast:
     return {"sort":"value", "value":ast["string"], "type": "float"}
   elif "variable" in ast:
     return {"sort":"variable", "name":ast["variable"]}
   else:
     return predicate_from_ast(ast)
+
+def procedure_signatures_from_ast(ast):
+  output = {}
+  for a in ast:
+    name = a["procedure_name"]
+    if name not in output:
+
+      if "type" in a:
+        proc_type = a["type"].asList()
+      else:
+        proc_type = []
+      output[name] = proc_type
+
+    else:
+      raise Exception(name + " has a duplicate type signature!")
+
+  return output
 
 def run():
     pass

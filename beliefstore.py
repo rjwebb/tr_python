@@ -33,7 +33,6 @@ def evaluate_conditions(conds, belief_store, variables):
   else:
     cond = conds[0]
     success, substitutions = eval_condition(cond, belief_store, variables)
-    # print success, substitutions
 
     if success:
       i = 0
@@ -53,14 +52,20 @@ def evaluate_conditions(conds, belief_store, variables):
 
 # Evaluate one condition
 def eval_condition(cond, belief_store, variables):
+  if cond['sort'] == 'negation':
+    inner_cond = cond['predicate']
 
-  # condition is an atom
-  if cond['sort'] == 'predicate':
+    success, substitutions = eval_condition(inner_cond, belief_store, variables)
+    print "negation of ", inner_cond
+    print success
+    if not success:
+      return True, [variables]
+    else:
+      return False, None
+  elif cond['sort'] == 'predicate':
     if cond['name'] == 'true':
       return True, [variables] # success, no instantiations
     else:
-      # print "evaluating:", cond['name'], cond['terms']
-
       substitutions = []
 
       for e in belief_store:

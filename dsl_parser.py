@@ -222,7 +222,10 @@ def procedure_from_ast(procedure_ast, input_types, procedure_names, action_names
 
 def rule_from_ast(ast, procedure_names, action_names, percept_names):
   conds = [cond_from_ast(cond) for cond in ast['conditions']]
-  actions = [action_from_ast(action,procedure_names,action_names) for action in ast['actions']]
+  if ast['actions'][0] == "()":
+    actions = []
+  else:
+    actions = [action_from_ast(action,procedure_names,action_names) for action in ast['actions']]
   return { "conds" : conds, "actions" : actions }
 
 def cond_from_ast(ast):

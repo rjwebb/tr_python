@@ -76,7 +76,7 @@ def predicate_to_string(pred):
 
 # Function for grounding a predicate/variable/value with some instantiated variables
 def apply_substitution(A, variables):
-  if A["sort"] == "predicate" or A["sort"] == "action":
+  if A["sort"] == "predicate" or A["sort"] == "action" or A["sort"] == "proc_call":
     new_terms = [apply_substitution(a, variables) for a in A["terms"]]
     return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
   elif A["sort"] == "variable":
@@ -109,9 +109,9 @@ def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
 
 
 # Evaluates the rules for a particular procedure to determine which rule to fire
-def get_action(belief_store, rules):
+def get_action(belief_store, rules, variables):
   for i, rule in enumerate(rules):
-    success, output = bs.evaluate_conditions(rule['conds'], belief_store, {})
+    success, output = bs.evaluate_conditions(rule['conds'], belief_store, variables)
     if success:
       return i, output
   raise Exception("no-firable-rule")
@@ -147,10 +147,12 @@ def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=N
   # 1. initialise variables
   LActs = {}
   FrdRules = {}
+
   index = 1
-  call = task_call
-  variables = instantiate_procedure_variables(procedures[call], parameters)
-  print "calling the procedure",call,"with variables", str(variables)
+  called_proc_name = task_call
+  original_variables = instantiate_procedure_variables(procedures[called_proc_name], parameters)
+  variables = original_variables
+  print "calling the procedure",called_proc_name,"with variables", str(variables)
 
   if use_pedro:
     client = pedroclient.PedroClient()
@@ -171,21 +173,29 @@ def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=N
     # to find the first rule with an inferable guard
 
     # get the rules for the called procedure
-    rules = procedures[call]['rules']
+    rules = procedures[called_proc_name]['rules']
 
-    R, Theta = get_action(belief_store, rules)
+    R, Theta = get_action(belief_store, rules, variables)
 
     applied_rule = rules[R]
     A = applied_rule['actions']
 
     ATheta = [apply_substitution(a, Theta) for a in A]
 
-    # if the rule consists of actions
-    if type(ATheta) is list:
-      ###
+    if len(ATheta) == 0:
+      pass
+    elif ATheta[0]["sort"] == "proc_call":
+      called_proc_name = ATheta[0]["name"]
+      arguments = ATheta[0]["terms"]
+      variables = instantiate_procedure_variables(procedures[called_proc_name], arguments)
+      print "calling the procedure",called_proc_name,"with variables", str(variables)
+
+      index += 1
+    else:
       ATheta_controls_only = []
+      
+      # for carrying out special actions
       for a in ATheta:
-        print a
         if a["name"] == "remember":
           t = a["terms"][0]
           print "remember the term", str(t)
@@ -218,22 +228,15 @@ def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=N
 
       # Go back to the top of the program
       index = 1
-      call = task_call
-
-    else: # ATheta is a procedure call
-      call = ATheta
-      variables = instantiate_procedure_variables(procedures[call], Theta)
-      print "calling the procedure",call,"with variables", str(variables)
-
-      print "called procedure",call
-      index += 1
+      called_proc_name = task_call
+      variables = original_variables
 
   # 3. loop exited, must have reached max call depth
   if index > max_dp:
     raise Exception("call-depth-reached")
 
 if __name__ == "__main__":
-  parsed_program = dsl.program.parseString(test_data.test_program10)
+  parsed_program = dsl.program.parseString(test_data.test_program11)
 
   task_call = "top_call"
 

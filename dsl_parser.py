@@ -99,28 +99,6 @@ def program_from_ast(ast):
 
   procedures = {}
   for proc in procedure_asts:
-    """
-    name = proc["procedure_name"]
-
-    rules = procedure_from_ast(proc["rules"], procedure_names, action_names, percept_names)
-    if "parameters" in proc:
-      parameters = procedure_parameters_from_ast(proc["parameters"])
-    else:
-      parameters = []
-
-    input_types = procedure_signatures[name]
-
-    if len(input_types) != len(parameters):
-      print input_types, parameters
-      raise Exception("the type signature and the definition for " + name + " have different numbers of terms!")
-    else:
-      for p, t in zip(parameters, input_types):
-        p['type'] = t
-
-    procedures[name] = {"name" : name,
-                        "rules" : rules,
-                        "parameters" : parameters}
-    """
     name = proc["procedure_name"]
     procedure_signature = procedure_signatures[name]
     procedures[name] = procedure_from_ast(proc, procedure_signature, procedure_names, action_names, percept_names)

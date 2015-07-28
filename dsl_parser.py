@@ -43,7 +43,7 @@ predicate << ( Group(lcName("head") + Optional(Suppress("(")+ Group(delimitedLis
 
 binary_condition = Group(expression("arg1") + binary_comparison("operator") + expression("arg2"))
 
-list_of_conditions = Group(delimitedList(( binary_condition | predicate ), delim="&"))
+list_of_conditions = Group(delimitedList(( binary_condition | Group(Literal("not") + predicate("negation")) | predicate ), delim="&"))
 list_of_actions = Group("()" | delimitedList(predicate, delim=","))
 
 rule = Group(list_of_conditions("conditions") + Suppress("~>") + list_of_actions("actions"))("rule")
@@ -57,6 +57,14 @@ procedure_type_signature = Group(term("procedure_name") + Suppress(":") + Suppre
 program_item = type_definition("type_definition") | type_signature("type_signature") | procedure("procedure") | procedure_type_signature("procedure_type_signature")
 
 program = OneOrMore(program_item)("program")
+
+
+# BUILT IN DEFINITIONS OF ACTIONS
+built_in_signatures = {
+  "remember" : {"percept_type" : "special_action", "type" : "predicate"},
+  "forget" : {"percept_type" : "special_action", "type" : "predicate"}
+}
+
 
 def program_from_ast(ast):
   type_definition_asts = []
@@ -75,10 +83,25 @@ def program_from_ast(ast):
       procedure_sig_asts.append(a)
 
   procedure_names = [k['procedure_name'] for k in procedure_asts]
-  print "procedure names:", procedure_names
+  #print "procedure names:", procedure_names
 
   type_definitions = type_definitions_from_ast(type_definition_asts)
-  type_signatures = type_signatures_from_ast(type_signature_asts)
+
+  parsed_type_signatures = type_signatures_from_ast(type_signature_asts)
+  type_signatures = {}
+  
+  for k,v in parsed_type_signatures.items():
+    if k in type_signatures:
+      raise Exception("duplicate type signature for " + k + " "  + str(v))
+    else:
+      type_signatures[k] = v
+
+  for k,v in built_in_signatures.items():
+    if k in type_signatures:
+      raise Exception(k + " is a reserved built-in predicate name!")
+    else:
+      type_signatures[k] = v
+
   procedure_signatures = procedure_signatures_from_ast(procedure_sig_asts)
 
   action_names = []
@@ -86,7 +109,9 @@ def program_from_ast(ast):
 
   for n in type_signatures:
     action = type_signatures[n]
-    if action['percept_type'] == 'durative' or action['percept_type'] == 'discrete': # is an action
+    if action['percept_type'] == 'durative' or \
+       action['percept_type'] == 'discrete' or \
+       action['percept_type'] == 'special_action': # is an action
       action_names.append(n)
     elif action['percept_type'] == 'percept': # is a percept
       percept_names.append(n)
@@ -201,6 +226,10 @@ def rule_from_ast(ast, procedure_names, action_names, percept_names):
   return { "conds" : conds, "actions" : actions }
 
 def cond_from_ast(ast):
+  if "negation" in ast.keys():
+    # it's a negation of a predicate
+    inner_predicate = cond_from_ast(ast['negation'])
+    return {"sort" : "negation", "predicate" : inner_predicate}
   if "head" in ast.keys(): #it is a predicate
     return predicate_from_ast(ast)
   elif "operator" in ast:
@@ -208,7 +237,7 @@ def cond_from_ast(ast):
     arg2 = expression_from_ast(ast["arg2"])
     return {"sort":"binary_condition", "operator":ast["operator"], "arg1":arg1, "arg2":arg2}
   else:
-    return {"error":"not a predicate"}
+    raise Exception(str(ast) + " is not a predicate, negation or binary comparison!")
 
 def action_from_ast(ast, procedure_names, action_names):
   if ast == "()":

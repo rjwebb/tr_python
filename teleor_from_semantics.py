@@ -77,7 +77,7 @@ def predicate_to_string(pred):
 # Function for grounding a predicate/variable/value with some instantiated variables
 def apply_substitution(A, variables):
   if A["sort"] == "predicate" or A["sort"] == "action":
-    new_terms = [apply_substitution(a) for a in A["terms"]]
+    new_terms = [apply_substitution(a, variables) for a in A["terms"]]
     return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
   elif A["sort"] == "variable":
     if A["name"] in variables:
@@ -125,20 +125,23 @@ def get_percepts(use_pedro, client=None):
   return percepts
 
 
-### UNFINISHED PART ###
 # Given a procedure, a list of values corresponding to the arguments of a procedure,
 # and the procedure's type signature, return the instantiated variables
-def instantiate_procedure_variables(procedure, parameters):
-  if len(procedure["parameters"]) == len(parameters):
-    for i, p in enumerate(parameters):
-      print i, p, procedure["parameters"][i], procedure["type"][i]
-    return {}
+def instantiate_procedure_variables(procedure, arguments):
+  parameters = procedure["parameters"]
+  if len(parameters) == len(arguments):
+    variables = {}
+    for i, a in enumerate(arguments):
+      parameter = parameters[i]
+      print i, a, parameter["name"], parameter["type"]
+      variables[parameter["name"]] = a
+    return variables
   else:
-    raise("Number of parameters " + str(parameters) + "passed to the procedure "+ procedure["name"] + "is incorrect!")
+    raise Exception("Number of parameters " + str(parameters) + " passed to the procedure "+ procedure["name"] + " is incorrect!")
 
 
 # The TR algorithm
-def run(task_call, max_dp, program, parameters, use_pedro=False, shell_name=None, server_name=None):
+def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=None, server_name=None):
   procedures = program['procedures']
 
   # 1. initialise variables
@@ -146,6 +149,8 @@ def run(task_call, max_dp, program, parameters, use_pedro=False, shell_name=None
   FrdRules = {}
   index = 1
   call = task_call
+  variables = instantiate_procedure_variables(procedures[call], parameters)
+  print "calling the procedure",call,"with variables", str(variables)
 
   if use_pedro:
     client = pedroclient.PedroClient()
@@ -157,8 +162,9 @@ def run(task_call, max_dp, program, parameters, use_pedro=False, shell_name=None
     client = None
 
   percepts = get_percepts(use_pedro, client=client)
-  belief_store = percepts
-
+  remembered_beliefs = []
+  belief_store = percepts + remembered_beliefs
+  print belief_store
   # 2. while the maximum call depth has not been reached
   while index <= max_dp:
     # 3. Evaluate the guards for the rules for Call in turn,
@@ -176,9 +182,27 @@ def run(task_call, max_dp, program, parameters, use_pedro=False, shell_name=None
 
     # if the rule consists of actions
     if type(ATheta) is list:
+      ###
+      ATheta_controls_only = []
+      for a in ATheta:
+        print a
+        if a["name"] == "remember":
+          t = a["terms"][0]
+          print "remember the term", str(t)
+          if t not in remembered_beliefs:
+            remembered_beliefs.append(t)
+        elif a["name"] == "forget":
+          t = a["terms"][0]          
+          print "forget the term", str(t)
+          if t in remembered_beliefs:
+            remembered_beliefs.remove(t)
+        else:
+          ATheta_controls_only.append(a)
+      
       # Compute controls CActs using actions of ATheta and Acts
-      CActs = [predicate_to_string(a) for a in ATheta]
+      CActs = [predicate_to_string(a) for a in ATheta_controls_only]
       print R, CActs
+      
       # Execute CActs
       execute(CActs, LActs, use_pedro=True, \
               client=client, server_name=server_name)
@@ -188,7 +212,9 @@ def run(task_call, max_dp, program, parameters, use_pedro=False, shell_name=None
 
       # Wait for a BeliefStore update
       percepts = get_percepts(use_pedro, client=client)
-      belief_store = percepts
+      belief_store = percepts + remembered_beliefs
+      
+      print belief_store
 
       # Go back to the top of the program
       index = 1
@@ -196,6 +222,9 @@ def run(task_call, max_dp, program, parameters, use_pedro=False, shell_name=None
 
     else: # ATheta is a procedure call
       call = ATheta
+      variables = instantiate_procedure_variables(procedures[call], Theta)
+      print "calling the procedure",call,"with variables", str(variables)
+
       print "called procedure",call
       index += 1
 
@@ -204,17 +233,18 @@ def run(task_call, max_dp, program, parameters, use_pedro=False, shell_name=None
     raise Exception("call-depth-reached")
 
 if __name__ == "__main__":
-  parsed_program = dsl.program.parseString(test_data.test_program8)
+  parsed_program = dsl.program.parseString(test_data.test_program10)
 
   task_call = "top_call"
-  print parsed_program.asXML()
+
   program = dsl.program_from_ast(parsed_program)
 
   print program
+  print "..."
   shell_name = "tr_python"
   server_name = "asteroids"
 
   # parameters with which to call the first method
   parameters = []
-  run(task_call, 10, program, parameters, use_pedro=True, shell_name=shell_name, server_name=server_name)
+  run(task_call, program, parameters, use_pedro=True, shell_name=shell_name, server_name=server_name)
 

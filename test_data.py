@@ -157,6 +157,7 @@ discrete shoot : (num)
 percept facing_direction : (num),
         see : (string, num)
 
+top_call : () ~>
 top_call{
 facing_direction(X) & X > 3.14 ~> turn_right
 facing_direction(X) & X <= 3.14 ~> turn_left
@@ -189,6 +190,51 @@ wander_about(X){
   true ~> turn_left, move_forward(0.3)
 }
 """
+
+test_program10 = """
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+discrete shoot : ()
+
+percept facing_direction : (num),
+        see : (string, num)
+
+top_call : () ~>
+top_call{
+see(asteroid, dead_centre, Dist) & Dist < 300 ~> move_forward, shoot
+see(asteroid, left, Dist) & Dist < 300 ~> turn_left, move_forward, shoot
+see(asteroid, right, Dist) & Dist < 300 ~> turn_right, move_forward, shoot
+true ~> turn_right
+}
+
+shoot_at : (num) ~>
+shoot_at(Dir){
+facing_direction(X) & X > Dir ~> turn_right, shoot
+facing_direction(X) & X < Dir ~> turn_left, shoot
+true ~> shoot
+}"""
+
+test_program11 = """
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+discrete shoot : ()
+
+percept facing_direction : (num),
+        see : (string, num)
+
+top_call : () ~>
+top_call{
+not see(asteroid, Dir, Dist) ~> turn_left
+true ~> turn_right
+}"""
 
 test_typedef = """arm ::= arm1 | arm2
 table ::= table1 | shared | table2

@@ -1,0 +1,32 @@
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+discrete shoot : ()
+
+percept facing_direction : (num),
+        see : (string, num)
+
+top_call : () ~>
+top_call{
+perform(foo) ~> beh1
+perform(bar) ~> beh2(2)
+true ~> remember(perform(foo))
+}
+
+
+beh1 : () ~>
+beh1{
+see(asteroid, left, A) ~> turn_left, move_backward, forget(perform(foo)), remember(perform(bar))
+see(asteroid, right, A) ~> turn_right, move_backward, forget(perform(foo)), remember(perform(bar))
+see(asteroid, centre, A) ~> shoot, forget(perform(foo)), remember(perform(bar))
+true ~> forget(perform(foo)), remember(perform(bar))
+}
+
+beh2 : (num) ~>
+beh2(Max){
+speed(S) & S > Max ~> move_backward, forget(perform(bar)), remember(perform(foo))
+true ~> move_forward, forget(perform(bar)), remember(perform(foo))
+}

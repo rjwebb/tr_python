@@ -1,0 +1,23 @@
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+discrete shoot : ()
+
+percept facing_direction : (num),
+        see : (string, num)
+
+point_at_asteroid : () ~>
+point_at_asteroid{
+see(asteroid, left, A) ~> turn_left
+see(asteroid, right, A) ~> turn_right
+true ~> ()
+}
+
+regulate_speed : (num) ~>
+regulate_speed(Max){
+speed(S) & S > Max ~> move_backward
+true ~> move_forward
+}

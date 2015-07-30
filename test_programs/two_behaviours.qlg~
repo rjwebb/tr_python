@@ -1,0 +1,24 @@
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+discrete shoot : ()
+
+percept facing_direction : (num),
+        see : (string, num)
+
+behaviour1 : () ~>
+behaviour1{
+see(asteroid, left, A) ~> turn_left, move_backward
+see(asteroid, right, A) ~> turn_right, move_backward
+see(asteroid, centre, A) ~> shoot
+true ~> ()
+}
+
+behaviour2 : () ~>
+behaviour2(){
+speed(S) & S > 2 ~> move_backward
+true ~> move_forward
+}

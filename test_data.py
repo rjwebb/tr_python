@@ -58,11 +58,11 @@ durative turn_right : (num),
 
 percept facing_direction : (num)
 
+top_call : () ~>
 top_call{
 facing_direction(X) ~> turn_right
 true ~> turn_left
 }"""
-
 
 
 test_program3 = """
@@ -71,6 +71,7 @@ durative turn_right : (num),
 
 percept facing_direction : (num)
 
+top_call : ~>
 top_call{
 facing_direction(X,10) ~> turn_right
 true ~> turn_left
@@ -82,26 +83,33 @@ durative turn_right : (num),
 
 percept facing_direction : (num)
 
+top_call : () ~>
 top_call{
 facing_direction(X,10.5) ~> splodge(X)
 true ~> turn_left
 }"""
 
 
-test_proc = """get_object{
-holding & see(0,centre) ~> ()
-holding & see(0,centre) ~> grab(100)
-holding ~> get_to
-true ~> release(1)
-}"""
+test_proc = """
+discrete grab : (num),
+         release : (num)
 
-test_program5 = """get_object{
+durative get_to : (),
+         turn : (direction),
+         move : (num)
+
+percept holding : (),
+        see : (num, direction)
+
+get_object : () ~>
+get_object{
 holding & see(0,centre) ~> ()
 holding & see(0,centre) ~> grab(100)
 holding ~> get_to
 true ~> release(1)
 }
 
+get_to : () ~>
 get_to {
 see(0, centre)    ~> ()
 see(0, Dir)       ~> turn(Dir)
@@ -110,6 +118,7 @@ see(_, Dir)       ~> move(4) , turn(Dir)
 true              ~> turn(left)
 }
 """
+
 
 test_program6 = """durative facing_direction : (num)
 top_task{
@@ -232,9 +241,16 @@ percept facing_direction : (num),
 
 top_call : () ~>
 top_call{
-not see(asteroid, Dir, Dist) ~> turn_left
-true ~> turn_right
-}"""
+see(asteroid, Dir, Dist) ~> shoot
+true ~> ()
+}
+
+regulate_speed : (num) ~>
+regulate_speed(Max){
+speed(S) & S > Max ~> move_backward
+true ~> move_forward
+}
+"""
 
 test_typedef = """arm ::= arm1 | arm2
 table ::= table1 | shared | table2
@@ -292,7 +308,7 @@ ground_preds = [pg1, pg2, pg3, pg4, pg5, pg6, pg7, pg8, pg9]
 variable_preds = [pv1, pv2, pv3, pv4, pv5]
 variables = [v1, v2, v3, v4]
 
-test_programs = [test_program, test_program2, test_program3, test_program4, test_program5, test_program6, test_program7, test_program8, test_program9]
+test_programs = [test_program, test_program2, test_program3, test_program4, test_program6, test_program7, test_program8, test_program9]
 
 
 def format_data(pred):

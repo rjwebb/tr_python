@@ -4,10 +4,10 @@ import copy
 
 # basic syntax things
 varName = Group(Regex("[A-Z][A-Za-z0-9_]*")("variable"))
-lcName = Regex("[a-z_][A-Za-z_]*")
+lcName = Regex("[a-z_][A-Za-z0-9_]*")
 term = Word(alphanums + "_" )
 
-list_of_args = Group(delimitedList(term, delim=","))
+list_of_args = Group(delimitedList(lcName, delim=","))
 
 # primitive types
 integer = Group( Optional("-")("sign") + Word(nums)("num"))
@@ -25,13 +25,13 @@ expression = infixNotation(simple_expression,
 
 # type definition rules
 range_type = Suppress("(") + integer("min") + Suppress("..") + integer("max") + Suppress(")")
-disjunction_of_atoms = Group(term("atom") + Suppress("|") + delimitedList(term("atom"), delim=r"|") )
-disjunction_of_types = Group(term("type") + Suppress("||") + delimitedList(term("type"), delim=r"||") )
+disjunction_of_atoms = Group(lcName("atom") + Suppress("|") + delimitedList(lcName("atom"), delim=r"|") )
+disjunction_of_types = Group(lcName("type") + Suppress("||") + delimitedList(lcName("type"), delim=r"||") )
 
-type_definition = Group(term("type_def_name") + Suppress("::=") + (range_type("range") | disjunction_of_atoms("disj_atoms") | disjunction_of_types("disj_types")))
+type_definition = Group(lcName("type_def_name") + Suppress("::=") + (range_type("range") | disjunction_of_atoms("disj_atoms") | disjunction_of_types("disj_types")))
 
 # type signature rules
-single_type_declaration = Group(term("head") + Suppress(":") + Suppress("(") + Optional(list_of_args("type")) + Suppress(")"))
+single_type_declaration = Group(lcName("head") + Suppress(":") + Suppress("(") + Optional(list_of_args("type")) + Suppress(")"))
 list_of_type_decs = delimitedList(single_type_declaration("type_dec"), delim=",")
 
 percept_type = (Literal("percept") | Literal("durative") | Literal("discrete"))
@@ -50,9 +50,9 @@ rule = Group(list_of_conditions("conditions") + Suppress("~>") + list_of_actions
 rules = Group(OneOrMore(rule))
 
 procedure_params = Suppress("(") + Group(delimitedList(varName))("parameters") + Suppress(")")
-procedure = Group(term("procedure_name") + Optional( procedure_params ) + Suppress("{") + rules("rules") + Suppress("}"))
+procedure = Group(lcName("procedure_name") + Optional( procedure_params ) + Suppress("{") + rules("rules") + Suppress("}"))
 
-procedure_type_signature = Group(term("procedure_name") + Suppress(":") + Suppress("(") + Optional(Group(delimitedList(term))("type")) + Suppress(")") + Suppress("~>") )
+procedure_type_signature = Group(lcName("procedure_name") + Suppress(":") + Suppress("(") + Optional(Group(delimitedList(lcName))("type")) + Suppress(")") + Suppress("~>") )
 
 program_item = type_definition("type_definition") | type_signature("type_signature") | procedure("procedure") | procedure_type_signature("procedure_type_signature")
 

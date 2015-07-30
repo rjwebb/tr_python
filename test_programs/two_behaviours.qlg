@@ -21,3 +21,19 @@ regulate_speed(Max){
 speed(S) & S > Max ~> move_backward
 true ~> move_forward
 }
+
+
+point_at_asteroid_regulate_speed : (num) ~>
+point_at_asteroid_regulate_speed(Max){
+see(asteroid, centre, A) & speed(S) & S > Max  ~> shoot, move_backward
+see(asteroid, centre, A) ~> shoot, move_forward
+
+see(asteroid, left, A) & speed(S) & S > Max ~> shoot, turn_left, move_backward
+see(asteroid, left, A) ~> shoot, turn_left, move_forward
+
+see(asteroid, right, A) & speed(S) & S > Max ~> shoot, turn_right, move_backward
+see(asteroid, right, A) ~> shoot, turn_right, move_forward
+
+true & speed(S) & S > Max ~> move_backward
+true ~> move_forward
+}

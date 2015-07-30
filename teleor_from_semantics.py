@@ -5,7 +5,8 @@ import dsl_parser as dsl
 import beliefstore as bs
 import pedroclient
 import pdb
-import test_data
+import sys
+import argparse
 
 # Methods for sending and receiving percepts - this is the part of the 
 # program that will be replaced if you choose to use ROS
@@ -74,6 +75,7 @@ def predicate_to_string(pred):
     raise Exception("not sure what this is: " + str(pred))
   return out
 
+
 # Function for grounding a predicate/variable/value with some instantiated variables
 def apply_substitution(A, variables):
   if A["sort"] == "predicate" or A["sort"] == "action" or A["sort"] == "proc_call":
@@ -81,15 +83,14 @@ def apply_substitution(A, variables):
     return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
   elif A["sort"] == "variable":
     if A["name"] in variables:
-      print A["name"], variables[A["name"]]
       return variables[A["name"]]
     else:
-      print A["name"], "not in the variables"
       return A
   elif A["sort"] == "value":
     return A
   else:
     raise Exception("what is "+ str(A) + " ?")
+
 
 # Function that is called when actions are performed
 def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
@@ -104,7 +105,6 @@ def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
 
     if len(cmds) > 0:
       cmd = "controls(["+",".join(cmds)+"])"
-      print cmd
       send_message(client, server_name, cmd)
 
 
@@ -140,9 +140,42 @@ def instantiate_procedure_variables(procedure, arguments):
     raise Exception("Number of parameters " + str(parameters) + " passed to the procedure "+ procedure["name"] + " is incorrect!")
 
 
+def is_integer(s):
+  try:
+    int(s)
+    return True
+  except ValueError:
+    return False
+
+def is_float(s):
+  try:
+    float(s)
+    return True
+  except ValueError:
+    return False
+
+
+def from_raw_parameters(raw_parameters):
+  out = []
+  for p in raw_parameters:
+    if is_integer(p):
+      t = "integer"
+      o = int(p)
+    elif is_float(p):
+      t = "float"
+      o = float(p)
+    elif type(p) == str:
+      t = "string"
+      o = p
+    else:
+      raise Exception("Not sure what type of parameter this is" + str(p))
+    out.append( { "sort" : "value", "value" : o, "type" : t } )
+  return out
+
 # The TR algorithm
-def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=None, server_name=None):
+def run(task_call, program, raw_parameters, max_dp=10, use_pedro=False, shell_name=None, server_name=None):
   procedures = program['procedures']
+  parameters = from_raw_parameters(raw_parameters)
 
   # 1. initialise variables
   LActs = {}
@@ -166,7 +199,7 @@ def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=N
   percepts = get_percepts(use_pedro, client=client)
   remembered_beliefs = []
   belief_store = percepts + remembered_beliefs
-  print belief_store
+  #print belief_store
   # 2. while the maximum call depth has not been reached
   while index <= max_dp:
     # 3. Evaluate the guards for the rules for Call in turn,
@@ -211,7 +244,7 @@ def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=N
       
       # Compute controls CActs using actions of ATheta and Acts
       CActs = [predicate_to_string(a) for a in ATheta_controls_only]
-      print R, CActs
+      #print R, CActs
       
       # Execute CActs
       execute(CActs, LActs, use_pedro=True, \
@@ -224,7 +257,7 @@ def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=N
       percepts = get_percepts(use_pedro, client=client)
       belief_store = percepts + remembered_beliefs
       
-      print belief_store
+      #print belief_store
 
       # Go back to the top of the program
       index = 1
@@ -236,18 +269,34 @@ def run(task_call, program, parameters, max_dp=10, use_pedro=False, shell_name=N
     raise Exception("call-depth-reached")
 
 if __name__ == "__main__":
-  parsed_program = dsl.program.parseString(test_data.test_program11)
+  parser = argparse.ArgumentParser(description='Run a teleo-reactive program.')
+  parser.add_argument('file', metavar='FILE', type=argparse.FileType('r'),
+                      help='the path to the file containing the teleo-reactive program')
 
-  task_call = "top_call"
+  parser.add_argument('task_call', metavar='TASK', default="task_call",
+                   help='the name of the task to be called')
+  
+  parser.add_argument('params', metavar='PARAM', type=str, nargs='*',
+                      help='parameters to be passed to the task call')
+
+  args = parser.parse_args()
+  program_file = args.file
+  task_call = args.task_call
+  print args.params
+  # parameters with which to call the first method
+  parameters = args.params
+
+  program_raw = program_file.read()
+  program_file.close()
+
+  parsed_program = dsl.program.parseString(program_raw)
 
   program = dsl.program_from_ast(parsed_program)
 
   print program
   print "..."
-  shell_name = "tr_python"
+  shell_name = "tr_python2"
   server_name = "asteroids"
 
-  # parameters with which to call the first method
-  parameters = []
   run(task_call, program, parameters, use_pedro=True, shell_name=shell_name, server_name=server_name)
 

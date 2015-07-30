@@ -54,14 +54,13 @@ def evaluate_conditions(conds, belief_store, variables):
 def eval_condition(cond, belief_store, variables):
   if cond['sort'] == 'negation':
     inner_cond = cond['predicate']
-
     success, substitutions = eval_condition(inner_cond, belief_store, variables)
-    print "negation of ", inner_cond
-    print success
+
     if not success:
       return True, [variables]
     else:
       return False, None
+
   elif cond['sort'] == 'predicate':
     if cond['name'] == 'true':
       return True, [variables] # success, no instantiations
@@ -110,18 +109,30 @@ this is like unification, but you will never have to match a variable with
 a variable because the BeliefStore is always ground??
 """
 def pattern_match(pred_input, pred_ground, variables):
+  # ground input is a variable - error!
   if pred_ground['sort'] == 'variable':
-    raise Exception("RHS must not be a variable!! oh no")
+    raise Exception("RHS must not be a variable!" + str(pred_ground))
 
-  if pred_input['sort'] == 'variable':
+  # if the input is a value
+  if pred_input['sort'] == 'value' and \
+     pred_ground['sort'] == 'value' and \
+     pred_input['value'] == pred_ground['value']:
+    success, result = True, variables
+
+  # input is a variable
+  elif pred_input['sort'] == 'variable':
     success, result = match_variable_with_predicate(pred_input, pred_ground, variables)
+
   # if the input is a predicate
-  elif pred_input['name'] == pred_ground['name']:
+  elif pred_input['sort'] == 'predicate' and \
+       pred_input['name'] == pred_ground['name']:
     # heads match
     success, result = match_bodies(pred_input['terms'], pred_ground['terms'], variables)
+
+  # the inputs don't match
   else:
-    # heads don't match - fail
     success, result = False, None
+
   return success, result
 
 def match_variable_with_predicate(var, pred, variables):

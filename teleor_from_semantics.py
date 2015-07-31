@@ -8,9 +8,11 @@ import pdb
 import sys
 import argparse
 
-# Methods for sending and receiving percepts - this is the part of the 
-# program that will be replaced if you choose to use ROS
-
+"""
+Using the PedroClient 'client',
+send a message containing 'percept_text'
+to the Pedro user 'addr'
+"""
 def send_message(client, addr, percept_text):
   if addr is None:
     print "No agent connected"
@@ -21,6 +23,9 @@ def send_message(client, addr, percept_text):
       print "Illegal percepts message"
 
 
+"""
+Return parsed beliefs, entered in at the terminal
+"""
 def get_user_input_beliefs():
   print "beliefs:",
   a = raw_input()
@@ -28,6 +33,9 @@ def get_user_input_beliefs():
   return [pedro_predicate_to_dict(b) for b in beliefs]
 
 
+"""
+Given an initialised PedroClient, wait for and return beliefs from the server
+"""
 def get_beliefs_from_server(client):
   # wait for signal
   while not client.notification_ready():
@@ -41,14 +49,21 @@ def get_beliefs_from_server(client):
   return [pedro_predicate_to_dict(b) for b in beliefs]
 
 
-# Functions for formatting predicates to be sent / received to Pedro
+"""
+Converts a predicate received by Pedro into its dict representation
+"""
 def pedro_predicate_to_dict(pred):
   ptype = type(pred)
+
   if ptype == pedroclient.PStruct:
     children = [pedro_predicate_to_dict(p) for p in pred.args]
-    return {"name" : pred.functor.val, "terms" : children, "sort" : "predicate" }
+    return {"name" : pred.functor.val,
+            "terms" : children,
+            "sort" : "predicate" }
+
   elif ptype == pedroclient.PAtom:
     return {"name" : pred.val, "terms" : [], "sort" : "predicate"}
+
   else:
     if ptype == pedroclient.PInteger:
       t = "integer"
@@ -61,12 +76,19 @@ def pedro_predicate_to_dict(pred):
     return {"sort" : "value", "value" : pred.val, "type" : t}
 
 
+
+"""
+Converts a predicate (as a dict) to its printed representation (a string)
+"""
 def predicate_to_string(pred):
   if pred["sort"] == "predicate" or pred["sort"] == "action":
     if len(pred["terms"]) == 0:
       out = pred["name"]
     else:
-      out = pred['name'] + "(" + ",".join([predicate_to_string(p) for p in pred['terms']]) + ")"
+      out = pred['name'] + \
+            "(" + \
+            ",".join([predicate_to_string(p) for p in pred['terms']]) + \
+            ")"
   elif pred["sort"] == "variable":
     out = pred["name"]
   elif pred["sort"] == "value":
@@ -76,9 +98,14 @@ def predicate_to_string(pred):
   return out
 
 
-# Function for grounding a predicate/variable/value with some instantiated variables
+
+"""
+If 'A' is a list of predicates with some variables,
+then this method grounds the predicates with respect to
+the mapping from variable names to values in  in 'variables'
+"""
 def apply_substitution(A, variables):
-  if A["sort"] == "predicate" or A["sort"] == "action" or A["sort"] == "proc_call":
+  if A["sort"] in ["predicate", "action", "proc_call"]:
     new_terms = [apply_substitution(a, variables) for a in A["terms"]]
     return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
   elif A["sort"] == "variable":
@@ -92,7 +119,11 @@ def apply_substitution(A, variables):
     raise Exception("what is "+ str(A) + " ?")
 
 
-# Function that is called when actions are performed
+"""
+Execute the actions contained in CActs.
+Knowledge of the previously fired actions (LActs) is required.
+It then sends the actions to the Pedro server
+"""
 def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
   cmds = []
   if use_pedro:
@@ -108,15 +139,26 @@ def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
       send_message(client, server_name, cmd)
 
 
-# Evaluates the rules for a particular procedure to determine which rule to fire
+"""
+Returns the first rule that evaluates to true
+rules - a list of rules
+belief_store - a set of predicates (truths)
+variables - a mapping from variable names to values
+"""
 def get_action(belief_store, rules, variables):
   for i, rule in enumerate(rules):
-    success, output = bs.evaluate_conditions(rule['conds'], belief_store, variables)
+    success, output = bs.evaluate_conditions(rule['conds'],
+                                             belief_store,
+                                             variables)
     if success:
       return i, output
   raise Exception("no-firable-rule")
 
 
+"""
+If using pedro wait for and receive new percepts from the server.
+If not, request user input (by keyboard) of percepts.
+"""
 def get_percepts(use_pedro, client=None):
   if use_pedro:
     percepts = get_beliefs_from_server(client)
@@ -125,8 +167,12 @@ def get_percepts(use_pedro, client=None):
   return percepts
 
 
-# Given a procedure, a list of values corresponding to the arguments of a procedure,
-# and the procedure's type signature, return the instantiated variables
+"""
+Given a procedure,
+a list of values corresponding to the arguments of a procedure,
+and the procedure's type signature,
+return the instantiated variables
+"""
 def instantiate_procedure_variables(procedure, arguments):
   parameters = procedure["parameters"]
   if len(parameters) == len(arguments):
@@ -137,9 +183,14 @@ def instantiate_procedure_variables(procedure, arguments):
       variables[parameter["name"]] = a
     return variables
   else:
-    raise Exception("Number of parameters " + str(parameters) + " passed to the procedure "+ procedure["name"] + " is incorrect!")
+    raise Exception("Number of parameters " + str(parameters) +
+                    " passed to the procedure "+ procedure["name"] +
+                    " is incorrect!")
 
 
+"""
+Returns true if the input can be converted to an integer
+"""
 def is_integer(s):
   try:
     int(s)
@@ -147,6 +198,9 @@ def is_integer(s):
   except ValueError:
     return False
 
+"""
+Returns true if the input can be converted to a floating-point number
+"""
 def is_float(s):
   try:
     float(s)
@@ -155,6 +209,10 @@ def is_float(s):
     return False
 
 
+"""
+Given a list of primitive data items expressed as a strings,
+convert as many as possible into integers or floats.
+"""
 def from_raw_parameters(raw_parameters):
   out = []
   for p in raw_parameters:
@@ -172,110 +230,117 @@ def from_raw_parameters(raw_parameters):
     out.append( { "sort" : "value", "value" : o, "type" : t } )
   return out
 
-# The TR algorithm
-def run(task_call, program, raw_parameters, max_dp=10, use_pedro=False, shell_name=None, server_name=None):
+
+"""
+This procedure calls a teleo-reactive procedure and returns a list of actions.
+program - the data structure describing the program to be called
+call - the name of the root TR procedure to be called
+parameters - a list of parameters to be passed to the procedure
+max_dp - maximum number of times that procedures can recursively call each other
+dp - the current recursive depth
+"""
+def call_procedure(program, call, parameters, belief_store,
+                   max_dp=10, dp=1):
+  # call depth reached exception
+  if dp > max_dp:
+    raise Exception("call-depth-reached")
+
   procedures = program['procedures']
-  parameters = from_raw_parameters(raw_parameters)
+  variables = instantiate_procedure_variables(procedures[call],
+                                              parameters)
 
-  # 1. initialise variables
-  LActs = {}
-  FrdRules = {}
+  rules = procedures[call]['rules']
+  R, Theta = get_action(belief_store, rules, variables)
+  A = rules[R]['actions']
+  ATheta = [apply_substitution(a, Theta) for a in A]
 
-  index = 1
-  called_proc_name = task_call
-  original_variables = instantiate_procedure_variables(procedures[called_proc_name], parameters)
-  variables = original_variables
-  print "calling the procedure",called_proc_name,"with variables", str(variables)
+  # the returned rule involves a procedure call
+  if len(ATheta) == 1 and ATheta[0]['sort'] == 'proc_call':
+    new_call = ATheta[0]['name']
+    new_parameters = ATheta[0]['terms']
+    new_dp = dp + 1
 
+    return call_procedure(program, new_call, new_parameters, belief_store,
+                          max_dp=max_dp, dp=new_dp)
+  else:
+    return A, Theta
+
+"""
+This procedure runs a teleo-reactive program.
+
+program - the data structure describing the program to be run
+task_call - the name of the root TR procedure to be called
+raw_parameters - a list of strings, which are the parameters to the procedure
+max_dp - maximum number of times that procedures can recursively call each other
+use_pedro - whether the program should send/receive messages via Pedro
+shell_name - the name the program will take when interacting using Pedro
+server_name - the name of the Pedro server the program will connect to
+
+"""
+def run(program, task_call, raw_parameters,
+        max_dp=10, use_pedro=False, shell_name=None, server_name=None):
   if use_pedro:
     client = pedroclient.PedroClient()
     c = client.register(shell_name)
     print "registered?  "+ str(c)
-
     client.p2p(server_name, "initialise_")
   else:
     client = None
 
-  percepts = get_percepts(use_pedro, client=client)
+  root_parameters = from_raw_parameters(raw_parameters)
   remembered_beliefs = []
-  belief_store = percepts + remembered_beliefs
-  #print belief_store
-  # 2. while the maximum call depth has not been reached
-  while index <= max_dp:
-    # 3. Evaluate the guards for the rules for Call in turn,
-    # to find the first rule with an inferable guard
 
-    # get the rules for the called procedure
-    rules = procedures[called_proc_name]['rules']
+  # the set of actions called in the last cycle
+  LActs = {}
 
-    R, Theta = get_action(belief_store, rules, variables)
+  # the main operation loop, run indefinitely
+  while True:
+    # Prepare the BeliefStore.
+    percepts = get_percepts(use_pedro, client=client)
+    belief_store = percepts + remembered_beliefs
 
-    applied_rule = rules[R]
-    A = applied_rule['actions']
+    # Get the actions that the robot must perform, as a result of calling
+    # the procedure 'task_call' in 'program' with 'root_parameters'.
+    actions, variables = call_procedure(program, task_call, root_parameters,
+                                        belief_store, max_dp=1, dp=1)
+    instantiated_actions = [apply_substitution(a, variables) for a in actions]
 
-    ATheta = [apply_substitution(a, Theta) for a in A]
+    print "actions to be executed:",instantiated_actions
 
-    if len(ATheta) == 0:
-      pass
-    elif ATheta[0]["sort"] == "proc_call":
-      called_proc_name = ATheta[0]["name"]
-      arguments = ATheta[0]["terms"]
-      variables = instantiate_procedure_variables(procedures[called_proc_name], arguments)
-      print "calling the procedure",called_proc_name,"with variables", str(variables)
+    # The next part is concerned with executing the returned actions.
+    controls_to_send = []
 
-      index += 1
-    else:
-      ATheta_controls_only = []
-      
-      # for carrying out special actions
-      for a in ATheta:
-        if a["name"] == "remember":
-          t = a["terms"][0]
-          print "remember the term", str(t)
-          if t not in remembered_beliefs:
-            remembered_beliefs.append(t)
-        elif a["name"] == "forget":
-          t = a["terms"][0]          
-          print "forget the term", str(t)
-          if t in remembered_beliefs:
-            remembered_beliefs.remove(t)
-        else:
-          ATheta_controls_only.append(a)
-      
-      # Compute controls CActs using actions of ATheta and Acts
-      CActs = [predicate_to_string(a) for a in ATheta_controls_only]
-      #print R, CActs
-      
-      # Execute CActs
-      execute(CActs, LActs, use_pedro=True, \
-              client=client, server_name=server_name)
+    # Apply the 'remember' and 'forget' rules.
+    for a in instantiated_actions:
+      if a["name"] == "remember":
+        t = a["terms"][0]
+        if t not in remembered_beliefs:
+          remembered_beliefs.add(t)
+      elif a["name"] == "forget":
+        t = a["terms"][0]
+        if t in remembered_beliefs:
+          remembered_beliefs.remove(t)
+      else:
+        controls_to_send.append(a)
 
-      # update LActs to the set of actions in ATheta
-      LActs = CActs
+    # Compute controls CActs.
+    CActs = [predicate_to_string(a) for a in controls_to_send]
 
-      # Wait for a BeliefStore update
-      percepts = get_percepts(use_pedro, client=client)
-      belief_store = percepts + remembered_beliefs
-      
-      #print belief_store
+    # Execute CActs.
+    execute(CActs, LActs, use_pedro=True, \
+            client=client, server_name=server_name)
 
-      # Go back to the top of the program
-      index = 1
-      called_proc_name = task_call
-      variables = original_variables
+    # update the set of last-called actions.
+    LActs = CActs
 
-  # 3. loop exited, must have reached max call depth
-  if index > max_dp:
-    raise Exception("call-depth-reached")
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description='Run a teleo-reactive program.')
   parser.add_argument('file', metavar='FILE', type=argparse.FileType('r'),
-                      help='the path to the file containing the teleo-reactive program')
+                      help='the file containing the teleo-reactive program')
 
   parser.add_argument('task_call', metavar='TASK', default="task_call",
                    help='the name of the task to be called')
-  
   parser.add_argument('params', metavar='PARAM', type=str, nargs='*',
                       help='parameters to be passed to the task call')
 
@@ -298,5 +363,5 @@ if __name__ == "__main__":
   shell_name = "tr_python2"
   server_name = "asteroids"
 
-  run(task_call, program, parameters, use_pedro=True, shell_name=shell_name, server_name=server_name)
-
+  run(program, task_call, parameters,
+      use_pedro=True, shell_name=shell_name, server_name=server_name)

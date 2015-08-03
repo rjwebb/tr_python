@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import dsl_parser as dsl
+import tr_grammar as grammar
 import beliefstore as bs
 import pedroclient
 import pdb
@@ -362,7 +363,7 @@ if __name__ == "__main__":
   program_file.close()
 
   # parse the program's source code
-  parsed_program = dsl.program.parseString(program_raw)
+  parsed_program = grammar.program.parseString(program_raw)
   program = dsl.program_from_ast(parsed_program)
 
   # the name of the task to be called

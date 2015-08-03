@@ -76,7 +76,6 @@ def pedro_predicate_to_dict(pred):
     return {"sort" : "value", "value" : pred.val, "type" : t}
 
 
-
 """
 Converts a predicate (as a dict) to its printed representation (a string)
 """
@@ -96,7 +95,6 @@ def predicate_to_string(pred):
   else:
     raise Exception("not sure what this is: " + str(pred))
   return out
-
 
 
 """
@@ -179,7 +177,6 @@ def instantiate_procedure_variables(procedure, arguments):
     variables = {}
     for i, a in enumerate(arguments):
       parameter = parameters[i]
-      print i, a, parameter["name"], parameter["type"]
       variables[parameter["name"]] = a
     return variables
   else:
@@ -197,6 +194,7 @@ def is_integer(s):
     return True
   except ValueError:
     return False
+
 
 """
 Returns true if the input can be converted to a floating-point number
@@ -254,8 +252,9 @@ def call_procedure(program, call, parameters, belief_store,
   A = rules[R]['actions']
   ATheta = [apply_substitution(a, Theta) for a in A]
 
-  # the returned rule involves a procedure call
+
   if len(ATheta) == 1 and ATheta[0]['sort'] == 'proc_call':
+    # the returned rule involves a procedure call
     new_call = ATheta[0]['name']
     new_parameters = ATheta[0]['terms']
     new_dp = dp + 1
@@ -263,7 +262,9 @@ def call_procedure(program, call, parameters, belief_store,
     return call_procedure(program, new_call, new_parameters, belief_store,
                           max_dp=max_dp, dp=new_dp)
   else:
+    # the returned rule consists of a list of actions
     return A, Theta
+
 
 """
 This procedure runs a teleo-reactive program.
@@ -279,7 +280,9 @@ server_name - the name of the Pedro server the program will connect to
 """
 def run(program, task_call, raw_parameters,
         max_dp=10, use_pedro=False, shell_name=None, server_name=None):
+
   if use_pedro:
+    # create a pedro client
     client = pedroclient.PedroClient()
     c = client.register(shell_name)
     print "registered?  "+ str(c)
@@ -305,9 +308,7 @@ def run(program, task_call, raw_parameters,
                                         belief_store, max_dp=1, dp=1)
     instantiated_actions = [apply_substitution(a, variables) for a in actions]
 
-    print "actions to be executed:",instantiated_actions
-
-    # The next part is concerned with executing the returned actions.
+    # List of actions to send to the agent
     controls_to_send = []
 
     # Apply the 'remember' and 'forget' rules.
@@ -315,15 +316,17 @@ def run(program, task_call, raw_parameters,
       if a["name"] == "remember":
         t = a["terms"][0]
         if t not in remembered_beliefs:
-          remembered_beliefs.add(t)
+          remembered_beliefs.append(t)
+
       elif a["name"] == "forget":
         t = a["terms"][0]
         if t in remembered_beliefs:
           remembered_beliefs.remove(t)
+
       else:
         controls_to_send.append(a)
 
-    # Compute controls CActs.
+    # Convert the actions to strings, to be sent to the agent
     CActs = [predicate_to_string(a) for a in controls_to_send]
 
     # Execute CActs.
@@ -335,6 +338,7 @@ def run(program, task_call, raw_parameters,
 
 
 if __name__ == "__main__":
+  # command-line arguments
   parser = argparse.ArgumentParser(description='Run a teleo-reactive program.')
   parser.add_argument('file', metavar='FILE', type=argparse.FileType('r'),
                       help='the file containing the teleo-reactive program')
@@ -344,24 +348,33 @@ if __name__ == "__main__":
   parser.add_argument('params', metavar='PARAM', type=str, nargs='*',
                       help='parameters to be passed to the task call')
 
-  args = parser.parse_args()
-  program_file = args.file
-  task_call = args.task_call
-  print args.params
-  # parameters with which to call the first method
-  parameters = args.params
+  parser.add_argument('--shell', dest="shell_name", type=str, default="",
+                      help='the name of the agent')
 
+  parser.add_argument('--server', dest="server_name", type=str, default="",
+                      help='the name of the server')
+
+  args = parser.parse_args()
+
+  # read the program file
+  program_file = args.file
   program_raw = program_file.read()
   program_file.close()
 
+  # parse the program's source code
   parsed_program = dsl.program.parseString(program_raw)
-
   program = dsl.program_from_ast(parsed_program)
 
-  print program
-  print "..."
-  shell_name = "tr_python2"
-  server_name = "asteroids"
+  # the name of the task to be called
+  task_call = args.task_call
 
+  # parameters with which to call the first method
+  parameters = args.params
+
+  # pedro parameters
+  shell_name = args.shell_name
+  server_name = args.server_name
+
+  # run the program
   run(program, task_call, parameters,
       use_pedro=True, shell_name=shell_name, server_name=server_name)

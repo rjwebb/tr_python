@@ -67,6 +67,11 @@ built_in_signatures = {
 
 
 def program_from_ast(ast):
+  """
+  Convert the result of parsing a TR program into the representation used by the interpreter
+
+  """
+
   type_definition_asts = []
   type_signature_asts = []
   procedure_asts = []
@@ -83,7 +88,6 @@ def program_from_ast(ast):
       procedure_sig_asts.append(a)
 
   procedure_names = [k['procedure_name'] for k in procedure_asts]
-  #print "procedure names:", procedure_names
 
   type_definitions = type_definitions_from_ast(type_definition_asts)
 
@@ -109,18 +113,16 @@ def program_from_ast(ast):
 
   for n in type_signatures:
     action = type_signatures[n]
-    if action['percept_type'] == 'durative' or \
-       action['percept_type'] == 'discrete' or \
-       action['percept_type'] == 'special_action': # is an action
+    ptype = action['percept_type']
+    if ptype == 'durative' or \
+       ptype == 'discrete' or \
+       ptype == 'special_action': # is an action
       action_names.append(n)
-    elif action['percept_type'] == 'percept': # is a percept
+    elif ptype == 'percept': # is a percept
       percept_names.append(n)
     else:
       raise Exception("unrecognised percept type for " + str(n))
 
-
-  print "actions:",action_names
-  print "percepts:", percept_names
 
   procedures = {}
   for proc in procedure_asts:
@@ -138,10 +140,6 @@ def procedure_parameters_from_ast(ast):
     output.append( { "name" : paramName, "sort" : "variable" } )
   return output
 
-def types_from_ast(ast):
-  type_defs = type_definitions_from_ast(ast)
-  type_sigs = type_signatures_from_ast(ast)
-  return { "type_definitions" : type_defs, "type_signatures" : type_sigs }
 
 
 def type_definitions_from_ast(ast):
@@ -207,8 +205,9 @@ def procedure_from_ast(procedure_ast, input_types, procedure_names, action_names
     parameters = []
 
   if len(input_types) != len(parameters):
-    print input_types, parameters
-    raise Exception("the type signature and the definition for " + name + " have different numbers of terms!")
+    raise Exception("the type signature and the definition for " + name + \
+                    " have different numbers of terms! (" + str(input_types) + 
+                    ", " + str(parameters) + ")")
   else:
     parameters_with_types = []
     for p, t in zip(parameters, input_types):

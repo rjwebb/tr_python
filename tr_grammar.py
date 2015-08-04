@@ -1,9 +1,16 @@
 from pyparsing import Literal, Word, alphanums, ZeroOrMore, Suppress, OneOrMore, Group, Optional, lineEnd, nums, Forward, delimitedList, Regex, QuotedString, infixNotation, opAssoc, oneOf
 
 """
+Parsing rules for the teleo-reactive language
+
+This uses pyparsing, a parser library for Python
+"""
+
+
+"""
 parsing variable names, terms, atoms
 """
-varName = Group(Regex("[A-Z][A-Za-z0-9_]*")("variable"))
+varName = Regex("[A-Z][A-Za-z0-9_]*")
 lcName = Regex("[a-z_][A-Za-z0-9_]*")
 term = Word(alphanums + "_" )
 
@@ -36,6 +43,7 @@ disjunction_of_types = Group(lcName("type") + Suppress("||") + delimitedList(lcN
 
 type_definition = Group(lcName("type_def_name") + Suppress("::=") + (range_type("range") | disjunction_of_atoms("disj_atoms") | disjunction_of_types("disj_types")))
 
+
 """
 rules to parse type declarations
 e.g.
@@ -56,7 +64,7 @@ type_signature = Group(percept_type("percept_type")  + Group(list_of_type_decs)(
 a predicate is defined recursively, hence the Forward() rule
 """
 predicate = Forward()
-predicate << ( Group(lcName("head") + Optional(Suppress("(")+ Group(delimitedList(predicate))('args') + Suppress(")")))("predicate") | varName | Group(float_num("float")) | Group(integer("integer")) | Group(string_value("string")) )
+predicate << ( Group(lcName("head") + Optional(Suppress("(")+ Group(delimitedList(predicate))('args') + Suppress(")")))("predicate") | Group(varName("variable")) | Group(float_num("float")) | Group(integer("integer")) | Group(string_value("string")) )
 
 
 """
@@ -69,7 +77,7 @@ list_of_actions = Group("()" | delimitedList(predicate, delim=","))
 rules for parsing expressions
 i.e. something that is evaluated to a value, like "2 + 1" or "1 / 6"
 """
-simple_expression = varName | Group(float_num("float")) | Group(integer("integer"))
+simple_expression = Group(varName("variable")) | Group(float_num("float")) | Group(integer("integer"))
 expression = infixNotation(simple_expression,
                            [
                              (oneOf("* /"), 2, opAssoc.LEFT),
@@ -96,7 +104,6 @@ the LHS of the rule is a list of conditions, which are either predicates, negate
 list_of_conditions = Group(delimitedList(( binary_condition | Group(Literal("not") + predicate("negation")) | predicate ), delim="&"))
 
 
-
 """
 a single TR rule,
 e.g.
@@ -109,7 +116,7 @@ rules = Group(OneOrMore(rule))
 """
 procedure definition
 """
-procedure_params = Suppress("(") + Optional(delimitedList(varName)) + Suppress(")")
+procedure_params = Suppress("(") + Optional(delimitedList(Group(varName("variable")))) + Suppress(")")
 procedure = Group(lcName("procedure_name") + procedure_params("parameters") + Suppress("{") + rules("rules") + Suppress("}"))
 
 

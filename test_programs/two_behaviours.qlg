@@ -1,3 +1,7 @@
+thing ::= asteroid | something
+
+direction ::= left | right | centre | dead_centre
+
 durative turn_right : (),
          turn_left : (),
          move_forward : (),
@@ -7,10 +11,10 @@ durative turn_right : (),
 discrete shoot : ()
 
 percept facing_direction : (num),
-        see : (string, num)
+        see : (thing, direction, num)
 
 point_at_asteroid : () ~>
-point_at_asteroid{
+point_at_asteroid( ){
 see(asteroid, left, A) ~> turn_left
 see(asteroid, right, A) ~> turn_right
 true ~> ()

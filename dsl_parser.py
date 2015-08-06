@@ -161,12 +161,38 @@ def procedure_from_ast(procedure_ast, input_types, procedure_names, action_names
             "parameters" : parameters_with_types}
 
 def rule_from_ast(ast, procedure_names, action_names, percept_names):
-  conds = [cond_from_ast(cond) for cond in ast['conditions']]
+  guard_conds = [cond_from_ast(cond) for cond in ast['guard_conditions']]
+  if "while_conditions" in ast:
+    while_conds = [cond_from_ast(cond) for cond in ast['while_conditions']]
+  else:
+    while_conds = []
+
+  if "while_minimum" in ast:
+    while_minimum = integer_from_ast(ast['while_minimum'])
+  else:
+    while_minimum = 0
+
+  if "until_conditions" in ast:
+    until_conds = [cond_from_ast(cond) for cond in ast['until_conditions']]
+  else:
+    until_conds = []
+
+  if "until_minimum" in ast:
+    until_minimum = integer_from_ast(ast['until_minimum'])
+  else:
+    until_minimum = 0
+
   if ast['actions'][0] == "()":
     actions = []
   else:
     actions = [action_from_ast(action,procedure_names,action_names) for action in ast['actions']]
-  return { "conds" : conds, "actions" : actions }
+
+  return { "guard_conditions" : guard_conds,
+           "while_conditions" : while_conds,
+           "while_minimum" : while_min,
+           "until_conditions" : until_conds,
+           "until_minimum" : until_min,
+           "actions" : actions }
 
 def cond_from_ast(ast):
   if "negation" in ast.keys():

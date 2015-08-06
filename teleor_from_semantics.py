@@ -146,7 +146,8 @@ variables - a mapping from variable names to values
 """
 def get_action(belief_store, rules, variables):
   for i, rule in enumerate(rules):
-    success, output = bs.evaluate_conditions(rule['conds'],
+    # current the algorithm only evaluates guard conditions
+    success, output = bs.evaluate_conditions(rule['guard_conditions'],
                                              belief_store,
                                              variables)
     if success:

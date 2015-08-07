@@ -161,11 +161,12 @@ def procedure_from_ast(procedure_ast, input_types, procedure_names, action_names
             "parameters" : parameters_with_types}
 
 def rule_from_ast(ast, procedure_names, action_names, percept_names):
-  guard_conds = [cond_from_ast(cond) for cond in ast['guard_conditions']]
+  guard_conditions = [cond_from_ast(cond) for cond in ast['guard_conditions']]
+
   if "while_conditions" in ast:
-    while_conds = [cond_from_ast(cond) for cond in ast['while_conditions']]
+    while_conditions = [cond_from_ast(cond) for cond in ast['while_conditions']]
   else:
-    while_conds = []
+    while_conditions = []
 
   if "while_minimum" in ast:
     while_minimum = integer_from_ast(ast['while_minimum'])
@@ -173,9 +174,9 @@ def rule_from_ast(ast, procedure_names, action_names, percept_names):
     while_minimum = 0
 
   if "until_conditions" in ast:
-    until_conds = [cond_from_ast(cond) for cond in ast['until_conditions']]
+    until_conditions = [cond_from_ast(cond) for cond in ast['until_conditions']]
   else:
-    until_conds = []
+    until_conditions = []
 
   if "until_minimum" in ast:
     until_minimum = integer_from_ast(ast['until_minimum'])
@@ -187,12 +188,13 @@ def rule_from_ast(ast, procedure_names, action_names, percept_names):
   else:
     actions = [action_from_ast(action,procedure_names,action_names) for action in ast['actions']]
 
-  return { "guard_conditions" : guard_conds,
-           "while_conditions" : while_conds,
-           "while_minimum" : while_min,
-           "until_conditions" : until_conds,
-           "until_minimum" : until_min,
+  return { "guard_conditions" : guard_conditions,
+           "while_conditions" : while_conditions,
+           "while_minimum" : while_minimum,
+           "until_conditions" : until_conditions,
+           "until_minimum" : until_minimum,
            "actions" : actions }
+
 
 def cond_from_ast(ast):
   if "negation" in ast.keys():
@@ -207,6 +209,7 @@ def cond_from_ast(ast):
     return {"sort":"binary_condition", "operator":ast["operator"], "arg1":arg1, "arg2":arg2}
   else:
     raise Exception(str(ast) + " is not a predicate, negation or binary comparison!")
+
 
 def action_from_ast(ast, procedure_names, action_names):
   if ast == "()":
@@ -225,12 +228,14 @@ def action_from_ast(ast, procedure_names, action_names):
   else:
     raise Exception(str(ast)+" isn't a procedure call or a defined action")
 
+
 def predicate_from_ast(ast):
   if "args" in ast.keys(): # it's a predicate with args
     args = [param_from_ast(p) for p in ast["args"]]
   else: # just an atom
     args = []
   return { "sort" : "predicate", "name" : ast["head"], "terms" : args }
+
 
 def expression_from_ast(ast):
   if len(ast) == 1:
@@ -240,6 +245,7 @@ def expression_from_ast(ast):
     operator = ast[1]
     right = expression_from_ast(ast[2])
     return {"sort" : "binary_operation", "operator" : operator, "left" : left, "right" : right }
+
 
 def param_from_ast(ast):
   if type(ast) == str:
@@ -254,6 +260,7 @@ def param_from_ast(ast):
     return {"sort":"variable", "name":ast["variable"]}
   else:
     return predicate_from_ast(ast)
+
 
 def procedure_signatures_from_ast(ast):
   output = {}

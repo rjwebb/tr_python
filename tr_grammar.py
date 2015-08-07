@@ -56,7 +56,8 @@ list_of_type_decs = delimitedList(single_type_declaration("type_dec"))
 
 percept_type = Literal("percept") | \
                Literal("durative") | \
-               Literal("discrete")
+               Literal("discrete") | \
+               Literal("belief")
 type_signature = Group(percept_type("percept_type")  + Group(list_of_type_decs)("type_decs"))
 
 

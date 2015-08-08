@@ -10,8 +10,22 @@ built_in_signatures = {
 DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS 
 """
 def type_check(arg, expected_type, parameters):
-  print arg, expected_type
-  return True
+  
+  # primitive types
+  if expected_type == 'string':
+    return (arg['sort'] == 'value' and arg['type'] == 'string') or arg['sort'] == 'variable'
+  
+  elif expected_type == 'num':
+    return (arg['sort'] == 'value' and (arg['type'] == 'integer' or arg['type'] == 'float')) or arg['sort'] == 'variable'
+  
+  # user defined type
+  else:
+    print expected_type
+    if arg['sort'] == 'predicate':
+      return True
+    else:
+      print arg, expected_type
+      return False
 
 
 

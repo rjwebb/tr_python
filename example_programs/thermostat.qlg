@@ -1,0 +1,11 @@
+discrete turn_on_heating : (),
+	 turn_off_heating : ()
+
+percept  is_too_cold : ()
+
+
+thermostat_task : () ~>
+thermostat_task(){
+is_too_cold ~> turn_on_heating
+true ~> turn_off_heating
+}

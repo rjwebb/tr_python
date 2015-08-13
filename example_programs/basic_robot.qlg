@@ -1,0 +1,17 @@
+direction ::= left | right | centre | dead_centre
+thing ::= asteroid | nothing
+
+durative move_forward : (),
+	 move_backward : (),
+	 turn_right : (),
+	 turn_left : ()
+
+percept  see : (thing, direction, num)
+
+proc1 : () ~>
+proc1(){
+not see(asteroid, Direction, Distance) ~> move_forward
+see(asteroid, right, X) ~> turn_left
+see(asteroid, left, X) ~> turn_right
+true ~> ()
+}

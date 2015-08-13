@@ -1,0 +1,18 @@
+discrete turn_on_heating : (),
+	 turn_off_heating : ()
+
+percept temperature : (num),
+	person_in_room : ()
+
+
+thermostat_behaviour : () ~>
+thermostat_behaviour(){
+person_in_room ~> regulate_temperature(28)
+true ~> regulate_temperature(18)
+}
+
+regulate_temperature : (num) ~>
+regulate_temperature(Target){
+temperature(Temperature) & Temperature < Target ~> turn_on_heating
+true ~> turn_off_heating
+}

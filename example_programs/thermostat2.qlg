@@ -1,0 +1,11 @@
+discrete turn_on_heating : (),
+	 turn_off_heating : ()
+
+percept temperature : (num)
+
+
+regulate_temperature : (num) ~>
+regulate_temperature(Target){
+temperature(Temperature) & Temperature < Target ~> turn_on_heating
+true ~> turn_off_heating
+}

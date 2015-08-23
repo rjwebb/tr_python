@@ -9,6 +9,17 @@ import pdb
 import sys
 import argparse
 
+try:
+  import pycallgraph
+  from pycallgraph import PyCallGraph
+  from pycallgraph import Config
+  from pycallgraph import GlobbingFilter
+  from pycallgraph.output import GraphvizOutput
+  PCG_AVAILABLE = True
+except ImportError:
+  PCG_AVAILABLE = False
+
+
 """
 Using the PedroClient 'client',
 send a message containing 'percept_text'
@@ -356,6 +367,9 @@ if __name__ == "__main__":
   parser.add_argument('--server', dest="server_name", type=str, default="",
                       help='the name of the server')
 
+  parser.add_argument('--graph', dest="pcg_graph",
+                      action="store_true", default=False)
+
   args = parser.parse_args()
 
   # read the program file
@@ -363,20 +377,51 @@ if __name__ == "__main__":
   program_raw = program_file.read()
   program_file.close()
 
+  if PCG_AVAILABLE and args.pcg_graph:
+    config = Config()
+    config.trace_filter = GlobbingFilter(exclude=[
+      'pedroclient.*',
+      'Queue.*',
+      'threading.*',
+      'socket.*',
+      'pycallgraph.*'
+    ])
+
+    parsing_graph_output = GraphvizOutput()
+    parsing_graph_output.output_file = 'parsing_graph.png'
+
+    tr_graph_output = GraphvizOutput()
+    tr_graph_output.output_file = 'tr_graph.png'
+
   # parse the program's source code
   parsed_program = grammar.program.parseString(program_raw)
-  program = dsl.program_from_ast(parsed_program)
+
+  if PCG_AVAILABLE and args.pcg_graph:
+    with PyCallGraph(output=parsing_graph_output, config=config):
+      program = dsl.program_from_ast(parsed_program)
+  else:
+    program = dsl.program_from_ast(parsed_program)
+
 
   # the name of the task to be called
   task_call = args.task_call
 
+
   # parameters with which to call the first method
   parameters = args.params
+
 
   # pedro parameters
   shell_name = args.shell_name
   server_name = args.server_name
 
+
   # run the program
-  run(program, task_call, parameters,
-      use_pedro=True, shell_name=shell_name, server_name=server_name)
+  if PCG_AVAILABLE and args.pcg_graph:
+    with PyCallGraph(output=tr_graph_output, config=config):
+
+      run(program, task_call, parameters,
+          use_pedro=True, shell_name=shell_name, server_name=server_name)
+  else:
+    run(program, task_call, parameters,
+        use_pedro=True, shell_name=shell_name, server_name=server_name)

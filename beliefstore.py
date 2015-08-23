@@ -30,7 +30,8 @@ def merge_dicts(*dict_args):
 
 def evaluate_conditions(conds, belief_store, variables):
   """
-  Evaluate a list of conditions (queries), with backtracking
+  Evaluate a list of conditions (queries).
+  It returns the first variable instantiation it finds that satisfies the query.
 
   conds -- the list of conditions (predicates) to be queried
   belief_store -- the set of percepts (facts) to query over

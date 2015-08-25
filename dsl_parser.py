@@ -29,6 +29,10 @@ def type_check(arg, expected_type, type_definitions, parameters):
     is_var = arg['sort'] == 'variable'
     return (is_val and (arg['type'] == 'integer' or arg['type'] == 'float')) or is_var
 
+  elif expected_type == 'predicate':
+    # the expected type is 'any predicate'
+    return arg['sort'] == 'predicate'
+
   # user defined type
   else:
     if arg['sort'] == 'predicate':

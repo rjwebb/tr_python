@@ -355,34 +355,34 @@ def call_procedure(program, call, parameters, belief_store,
   rules = procedures[call]['rules']
 
   if len(fired_rules) > dp:
-    prev_fired_rule = fired_rules[dp - 1]
+    prev_firing = fired_rules[dp - 1]
   else:
-    prev_fired_rule = None
+    prev_firing = {}
 
+  """
   R, Theta = get_action(belief_store, rules,
                         variables, current_time,
-                        prev_fired_rule=prev_fired_rule)
-  A = rules[R]['actions']
-  ATheta = [apply_substitution(a, Theta) for a in A]
+                        prev_firing=prev_firing)
+  """
+  firing = get_action(belief_store, rules,
+                      variables, current_time,
+                      prev_firing=prev_firing)
 
-  fired_rule = { 'actions' : ATheta,
-                 'R' : R,
-                 'last_fired' : current_time,
-                 'dp' : dp}
 
   new_fired_rules = copy.copy(fired_rules)
 
+  # refiring/continuation stuff
   if len(fired_rules) > dp:
     # a rule at the same depth in the stack
     # has previously fired
 
     prev_R = fired_rules[dp - 1]['R']
-    new_R = fired_rule['R']
+    new_R = firing['R']
 
     prev_A = fired_rules[dp - 1]['actions']
-    new_A = fired_rule['actions']
+    new_A = firing['actions']
 
-    new_fired_rules[dp - 1] = fired_rule
+    new_fired_rules[dp - 1] = firing
 
     # if a different rule has been fired, then
     # all rules from child procedure calls
@@ -394,13 +394,15 @@ def call_procedure(program, call, parameters, belief_store,
 
   else:
     # no rule at the same depth of the stack has fired previously
-    new_fired_rules.append(fired_rule)
+    new_fired_rules.append(firing)
 
   # process the action side (body) of the rule
-  if len(ATheta) == 1 and ATheta[0]['sort'] == 'proc_call':
+  actions = firing['actions']
+
+  if len(actions) == 1 and actions[0]['sort'] == 'proc_call':
     # the returned rule involves a procedure call
-    new_call = ATheta[0]['name']
-    new_parameters = ATheta[0]['terms']
+    new_call = actions[0]['name']
+    new_parameters = actions[0]['terms']
     new_dp = dp + 1
 
     return call_procedure(program, new_call, new_parameters, belief_store,
@@ -408,7 +410,7 @@ def call_procedure(program, call, parameters, belief_store,
                           max_dp=max_dp, dp=new_dp)
   else:
     # the returned rule consists of a list of actions
-    return A, Theta, new_fired_rules
+    return firing, new_fired_rules
 
 
 """
@@ -468,13 +470,14 @@ def run(program, task_call, raw_parameters,
 
     # Get the actions that the robot must perform, as a result of calling
     # the procedure 'task_call' in 'program' with 'root_parameters'.
-    actions, variables, new_fired_rules = call_procedure(program, task_call,
+    firing, new_fired_rules = call_procedure(program, task_call,
                                                        root_parameters,
                                                        belief_store,
                                                        current_time,
                                                        fired_rules,
                                                        max_dp=10, dp=1)
-    instantiated_actions = [apply_substitution(a, variables) for a in actions]
+
+    instantiated_actions = firing['actions']
     fired_rules = new_fired_rules
 
     # List of actions to send to the agent

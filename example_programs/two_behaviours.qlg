@@ -27,6 +27,24 @@ regulate_speed : (num) ~>
   true ~> move_forward
 }
 
+test : () ~>
+test(){
+  see(asteroid, left, A) ~> test2
+  true ~> ()
+}
+
+test2 : () ~>
+test2(){
+  see(asteroid, right, A) ~> move_forward
+  true ~> test3
+}
+
+test3 : () ~>
+test3(){
+  see(asteroid, left, A) ~> shoot
+  true ~> ()
+}
+
 
 point_at_asteroid_regulate_speed : (num) ~>
 point_at_asteroid_regulate_speed(Max){

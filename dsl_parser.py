@@ -6,37 +6,61 @@ built_in_signatures = {
   "forget" : {"percept_type" : "special_action", "type" : ["predicate"], "sort" : "action"}
 }
 
-"""
-DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS 
-"""
-def type_check(arg, expected_type, parameters):
-  
+
+def type_check(arg, expected_type, type_definitions, parameters):
   # primitive types
   if expected_type == 'string':
     return (arg['sort'] == 'value' and arg['type'] == 'string') or arg['sort'] == 'variable'
-  
+
   elif expected_type == 'num':
-    return (arg['sort'] == 'value' and (arg['type'] == 'integer' or arg['type'] == 'float')) or arg['sort'] == 'variable'
-  
+    is_val = arg['sort'] == 'value'
+    is_var = arg['sort'] == 'variable'
+    return (is_val and (arg['type'] == 'integer' or arg['type'] == 'float')) or is_var
+
   # user defined type
   else:
-    print expected_type
     if arg['sort'] == 'predicate':
-      return True
+      expected_type_definition = type_definitions[expected_type]
+      s = expected_type_definition['sort']
+
+      # disjunction of atoms type
+      if s == "disj_atoms":
+        atoms = expected_type_definition['atoms']
+        return arg['name'] in atoms
+
+      # disjunction of types type
+      elif s == "disj_types":
+        types = expected_type_definition['types']
+        for t in types:
+          if type_check(arg, t, type_definitions, parameters):
+            return True
+        return False
+
+      # range type
+      elif s == "range_type":
+        is_num = type_check(arg, "num", type_definitions, parameters)
+        if is_num:
+          max_val = expected_type_definition['max']
+          min_val = expected_type_definition['min']
+          val = arg['value']
+          return val >= min_val and val <= max_val
+        else:
+          return False
+      else:
+        raise Exception("Invalid type definition "+ str(expected_type_definition))
     else:
-      print arg, expected_type
       return False
 
 
 
-def type_check_args(args, expected_types, type_signatures, parameters):
+def type_check_args(args, expected_types, type_definitions, type_signatures, parameters):
   if len(args) != len(expected_types):
     raise Exception("the number of arguments do not match: " + str(args) + ", " + str(expected_types))
   else:
     success = True
 
     for a, t in zip(args, expected_types):
-      t = type_check(a, t, parameters)
+      t = type_check(a, t, type_definitions, parameters)
       if not t:
         success = False
 
@@ -78,7 +102,7 @@ def program_from_ast(ast):
       raise Exception("duplicate type signature for " + k + " "  + str(v))
     else:
       type_signatures[k] = v
-  
+
   for k,v in parsed_type_signatures.items():
     if k in type_signatures:
       raise Exception("duplicate type signature for " + k + " "  + str(v))
@@ -94,7 +118,7 @@ def program_from_ast(ast):
   procedures = {}
   for proc in procedure_asts:
     name = proc['procedure_name']
-    procedures[name] = procedure_from_ast(proc, type_signatures)
+    procedures[name] = procedure_from_ast(proc, type_definitions, type_signatures)
 
   return { "type_definitions" : type_definitions,
            "type_signatures" : type_signatures,
@@ -110,7 +134,7 @@ def procedure_parameters_from_ast(ast):
 
 
 def type_definitions_from_ast(ast):
-  type_defs = []
+  type_defs = dict([])
 
   for item in ast:
     name = item['type_def_name']
@@ -130,7 +154,7 @@ def type_definitions_from_ast(ast):
     else:
       raise Exception("type definition is invalid!")
 
-    type_defs.append(e)
+    type_defs[name] = e
   return type_defs
 
 def integer_from_ast(ast):
@@ -173,7 +197,7 @@ def type_signatures_from_ast(ast):
         sigs[ e['head'] ] = { 'percept_type': a['percept_type'], 'type': t, 'sort': psort }
   return sigs
 
-def procedure_from_ast(procedure_ast, type_signatures):
+def procedure_from_ast(procedure_ast, type_definitions, type_signatures):
   name = procedure_ast["procedure_name"]
   input_types = type_signatures[name]['type']
 
@@ -197,7 +221,7 @@ def procedure_from_ast(procedure_ast, type_signatures):
 
     rules = []
     for rule in procedure_ast["rules"]:
-      r = rule_from_ast(rule, type_signatures, parameters_with_types)
+      r = rule_from_ast(rule, type_definitions, type_signatures, parameters_with_types)
       rules.append(r)
 
     return {"name" : name,
@@ -205,11 +229,11 @@ def procedure_from_ast(procedure_ast, type_signatures):
             "parameters" : parameters_with_types}
 
 
-def rule_from_ast(ast, type_signatures, parameters):
-  guard_conditions = [cond_from_ast(cond, type_signatures, parameters) for cond in ast['guard_conditions']]
+def rule_from_ast(ast, type_definitions, type_signatures, parameters):
+  guard_conditions = [cond_from_ast(cond, type_definitions, type_signatures, parameters) for cond in ast['guard_conditions']]
 
   if "while_conditions" in ast:
-    while_conditions = [cond_from_ast(cond, type_signatures, parameters) for cond in ast['while_conditions']]
+    while_conditions = [cond_from_ast(cond, type_definitions, type_signatures, parameters) for cond in ast['while_conditions']]
   else:
     while_conditions = []
 
@@ -219,7 +243,7 @@ def rule_from_ast(ast, type_signatures, parameters):
     while_minimum = 0
 
   if "until_conditions" in ast:
-    until_conditions = [cond_from_ast(cond, type_signatures, parameters) for cond in ast['until_conditions']]
+    until_conditions = [cond_from_ast(cond, type_definitions, type_signatures, parameters) for cond in ast['until_conditions']]
   else:
     until_conditions = []
 
@@ -231,7 +255,7 @@ def rule_from_ast(ast, type_signatures, parameters):
   if ast['actions'][0] == "()":
     actions = []
   else:
-    actions = [action_from_ast(action, type_signatures, parameters) for action in ast['actions']]
+    actions = [action_from_ast(action, type_definitions, type_signatures, parameters) for action in ast['actions']]
 
   return { "guard_conditions" : guard_conditions,
            "while_conditions" : while_conditions,
@@ -241,27 +265,27 @@ def rule_from_ast(ast, type_signatures, parameters):
            "actions" : actions }
 
 
-def cond_from_ast(ast, type_signatures, parameters):
+def cond_from_ast(ast, type_definitions, type_signatures, parameters):
   if "negation" in ast.keys():
     # it's a negation of a predicate
-    inner_predicate = cond_from_ast(ast['negation'], type_signatures, parameters)
+    inner_predicate = cond_from_ast(ast['negation'], type_definitions, type_signatures, parameters)
     return {"sort" : "negation", "predicate" : inner_predicate}
 
   elif "head" in ast.keys():
     # it's a predicate
-    return predicate_from_ast(ast, type_signatures, parameters)
+    return predicate_from_ast(ast, type_definitions, type_signatures, parameters)
 
   elif "operator" in ast:
     # it's a binary comparison
-    arg1 = expression_from_ast(ast["arg1"], type_signatures, parameters)
-    arg2 = expression_from_ast(ast["arg2"], type_signatures, parameters)
+    arg1 = expression_from_ast(ast["arg1"], type_definitions, type_signatures, parameters)
+    arg2 = expression_from_ast(ast["arg2"], type_definitions, type_signatures, parameters)
     return {"sort":"binary_condition", "operator":ast["operator"], "arg1":arg1, "arg2":arg2}
 
   else:
     raise Exception(str(ast) + " is not a predicate, negation or binary comparison!")
 
 
-def action_from_ast(ast, type_signatures, parameters):
+def action_from_ast(ast, type_definitions, type_signatures, parameters):
   if ast == "()":
     return {}
 
@@ -270,13 +294,13 @@ def action_from_ast(ast, type_signatures, parameters):
 
     if head_sort == 'procedure':
       # it's a procedure call
-      p = predicate_from_ast(ast, type_signatures, parameters)
+      p = predicate_from_ast(ast, type_definitions, type_signatures, parameters)
       p['sort'] = "proc_call"
       return p
 
     elif head_sort == 'action':
       # it's an action
-      p = predicate_from_ast(ast, type_signatures, parameters)
+      p = predicate_from_ast(ast, type_definitions, type_signatures, parameters)
       p['sort'] = "action"
       return p
 
@@ -293,9 +317,9 @@ def action_from_ast(ast, type_signatures, parameters):
                     "on the right hand side of a rule")
 
 
-def predicate_from_ast(ast, type_signatures, parameters):
+def predicate_from_ast(ast, type_definitions, type_signatures, parameters):
   if "args" in ast.keys(): # it's a predicate with args
-    args = [param_from_ast(p, type_signatures, parameters) for p in ast["args"]]
+    args = [param_from_ast(p, type_definitions, type_signatures, parameters) for p in ast["args"]]
 
     name = ast['head']
 
@@ -303,9 +327,8 @@ def predicate_from_ast(ast, type_signatures, parameters):
       expected_type = type_signatures[name]['type']
     else:
       raise Exception("no type signature provided for "+name)
-    
-    
-    tc = type_check_args(args, expected_type, type_signatures, parameters)
+
+    tc = type_check_args(args, expected_type, type_definitions, type_signatures, parameters)
 
     if tc:
       # type check passes
@@ -314,23 +337,23 @@ def predicate_from_ast(ast, type_signatures, parameters):
       # type check fails!!
       raise Exception("the terms of the predicate " + str(ast) + \
                       " do not match its expected type " + str(expected_type))
-    
+
   else: # just an atom
     args = []
   return { "sort" : "predicate", "name" : ast["head"], "terms" : args }
 
 
-def expression_from_ast(ast, type_signatures, parameters):
+def expression_from_ast(ast, type_definitions, type_signatures, parameters):
   if len(ast) == 1:
-    return param_from_ast(ast, type_signatures, parameters)
+    return param_from_ast(ast, type_definitions, type_signatures, parameters)
   else:
-    left = expression_from_ast(ast[0], type_signatures, parameters)
+    left = expression_from_ast(ast[0], type_definitions, type_signatures, parameters)
     operator = ast[1]
-    right = expression_from_ast(ast[2], type_signatures, parameters)
+    right = expression_from_ast(ast[2], type_definitions, type_signatures, parameters)
     return {"sort" : "binary_operation", "operator" : operator, "left" : left, "right" : right }
 
 
-def param_from_ast(ast, type_signatures, parameters):
+def param_from_ast(ast, type_definitions, type_signatures, parameters):
   if type(ast) == str:
     return {"sort":"value", "value":ast, "type": "atom"}
   elif "integer" in ast:
@@ -342,7 +365,7 @@ def param_from_ast(ast, type_signatures, parameters):
   elif "variable" in ast:
     return {"sort":"variable", "name":ast["variable"]}
   else:
-    return predicate_from_ast(ast, type_signatures, parameters)
+    return predicate_from_ast(ast, type_definitions, type_signatures, parameters)
 
 
 def procedure_signatures_from_ast(ast):

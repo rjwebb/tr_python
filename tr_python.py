@@ -47,6 +47,15 @@ def get_user_input_beliefs():
   return [pedro_predicate_to_dict(b) for b in beliefs]
 
 
+
+def process_pedro_beliefs(raw_message):
+  p2pmsg = raw_message[0]
+  message = p2pmsg.args[2]
+  beliefs = message.toList()
+
+  return [pedro_predicate_to_dict(b) for b in beliefs]
+
+
 """
 Given an initialised PedroClient, wait for and return beliefs from the server
 """
@@ -56,12 +65,20 @@ def get_beliefs_from_server(client):
     pass
 
   raw_message = client.get_term()
-  p2pmsg = raw_message[0]
-  message = p2pmsg.args[2]
-  beliefs = message.toList()
 
-  return [pedro_predicate_to_dict(b) for b in beliefs]
+  return process_pedro_beliefs(raw_message)
 
+"""
+Given an initialised PedroClient, return beliefs from the server.
+If there aren't any waiting, return None
+"""
+def get_beliefs_from_server_no_wait(client):
+  if client.notification_ready():
+    raw_message = client.get_term()
+
+    return process_pedro_beliefs(raw_message)
+  else:
+    return None
 
 """
 Converts a predicate received by Pedro into its dict representation
@@ -159,45 +176,92 @@ variables - a mapping from variable names to values
 """
 def get_action(belief_store, rules,
                variables, current_time,
-               prev_fired_rule=None):
-  if prev_fired_rule:
-    prev_R = prev_fired_rule['R']
-    rule = rules[prev_R]
+               prev_firing=None):
 
-    # check the while minimum time
-    prev_last_fired = prev_fired_rule['last_fired']
-    time_since_last_fire = (current_time - prev_last_fired)
 
-    if time_since_last_fire < rule['while_minimum']:
-      print "while min"
-      return prev_R, variables
+  check_guards = True
+  rule_found = False
 
-    # check the while condition
-    success, output = bs.evaluate_conditions(rule['while_conditions'],
-                                             belief_store,
-                                             variables)
+  # evaluate while/until conditions
+  if prev_firing:
+    some_conds = False
+
+    prev_R = prev_firing['R']
+    prev_rule = rules[prev_R]
+
+    time_since_last_fire = (current_time - prev_firing['last_guard_fired'])
+
+    while_inferable = bs.evaluate_conditions(prev_rule['while_conditions'],
+                                             belief_store, variables)[0]
+    while_min_expired = time_since_last_fire > prev_rule['while_minimum']
+
+    if while_inferable or not while_min_expired:
+      until_inferable = bs.evaluate_conditions(prev_rule['until_conditions'],
+                                             belief_store, variables)[0]
+      until_min_expired = time_since_last_fire > prev_rule['until_minimum']
+
+      if not until_inferable or not until_min_expired:
+        R = prev_R
+        Theta = prev_firing['variables']
+
+        # don't bother checking guards
+        check_guards = False
+
+        # rule found!
+        rule_found = True
+
+        # need to see if the guard is inferable, to check whether
+        # 'last_guard_fired' should be updated
+        guard_inferable = bs.evaluate_conditions(prev_rule['guard_conditions'],
+                                                 belief_store, variables)[0]
+        if guard_inferable:
+          last_guard_fired = current_time
+        else:
+          last_guard_fired = prev_firing['last_guard_fired']
+
+  # if no while/until conditions can be evaluated,
+  # check guards in the normal way (like in TR)
+  if check_guards:
+    # otherwise check the guards of the rules
+    i = 0
+    success = False
+    while not success and i < len(rules):
+      rule = rules[i]
+      success, output = bs.evaluate_conditions(rule['guard_conditions'],
+                                               belief_store,
+                                               variables)
+      i += 1
+
     if success:
-      print "while cond"
-      return prev_R, output
+      R = i - 1
+      Theta = output
+      rule_found = True
+      last_guard_fired = current_time
 
-  # otherwise check the guards of the rules
-  for i, rule in enumerate(rules):
-    success, output = bs.evaluate_conditions(rule['guard_conditions'],
-                                             belief_store,
-                                             variables)
-    if success:
-      return i, output
+  if rule_found:
+    A = rules[R]['actions']
+    actions = [apply_substitution(a, Theta) for a in A]
 
-  raise Exception("no-firable-rule")
+    fired_rule = { 'actions' : actions,
+                   'R' : R,
+                   'last_fired' : current_time,
+                   'variables' : Theta,
+                   'last_guard_fired' : last_guard_fired }
+    return fired_rule
+  else:
+    raise Exception("no-firable-rule")
 
 
 """
 If using pedro wait for and receive new percepts from the server.
 If not, request user input (by keyboard) of percepts.
 """
-def get_percepts(use_pedro, client=None):
+def get_percepts(use_pedro, client=None, wait=True):
   if use_pedro:
-    percepts = get_beliefs_from_server(client)
+    if wait:
+      percepts = get_beliefs_from_server(client)
+    else:
+      percepts = get_beliefs_from_server_no_wait(client)
   else:
     percepts = get_user_input_beliefs()
   return percepts
@@ -360,7 +424,8 @@ server_name - the name of the Pedro server the program will connect to
 
 """
 def run(program, task_call, raw_parameters,
-        max_dp=10, use_pedro=False, shell_name=None, server_name=None):
+        max_dp=10, use_pedro=False, shell_name=None, server_name=None,
+        update_mode="wait"):
 
   if use_pedro:
     # create a pedro client
@@ -384,12 +449,21 @@ def run(program, task_call, raw_parameters,
   start_time = time.time()
   current_time = start_time
 
+  percepts = []
+
   # the main operation loop, run indefinitely
   while True:
     current_time = time.time() - start_time
 
-    # Prepare the BeliefStore.
-    percepts = get_percepts(use_pedro, client=client)
+    # Get percepts from whatever method
+    if update_mode == "wait":
+      percepts = get_percepts(use_pedro, client=client, wait=True)
+    else:
+      rec_percepts = get_percepts(use_pedro, client=client, wait=False)
+      # if there is a BS update, then update. otherwise continue with same ol' percepts
+      if rec_percepts:
+        percepts = rec_percepts
+
     belief_store = percepts + remembered_beliefs
 
     # Get the actions that the robot must perform, as a result of calling

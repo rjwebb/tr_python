@@ -8,6 +8,19 @@ import pedroclient
 import pdb
 import sys
 import argparse
+import time
+import copy
+
+try:
+  import pycallgraph
+  from pycallgraph import PyCallGraph
+  from pycallgraph import Config
+  from pycallgraph import GlobbingFilter
+  from pycallgraph.output import GraphvizOutput
+  PCG_AVAILABLE = True
+except ImportError:
+  PCG_AVAILABLE = False
+
 
 """
 Using the PedroClient 'client',
@@ -144,14 +157,37 @@ rules - a list of rules
 belief_store - a set of predicates (truths)
 variables - a mapping from variable names to values
 """
-def get_action(belief_store, rules, variables):
+def get_action(belief_store, rules,
+               variables, current_time,
+               prev_fired_rule=None):
+  if prev_fired_rule:
+    prev_R = prev_fired_rule['R']
+    rule = rules[prev_R]
+
+    # check the while minimum time
+    prev_last_fired = prev_fired_rule['last_fired']
+    time_since_last_fire = (current_time - prev_last_fired)
+
+    if time_since_last_fire < rule['while_minimum']:
+      print "while min"
+      return prev_R, variables
+
+    # check the while condition
+    success, output = bs.evaluate_conditions(rule['while_conditions'],
+                                             belief_store,
+                                             variables)
+    if success:
+      print "while cond"
+      return prev_R, output
+
+  # otherwise check the guards of the rules
   for i, rule in enumerate(rules):
-    # current the algorithm only evaluates guard conditions
     success, output = bs.evaluate_conditions(rule['guard_conditions'],
                                              belief_store,
                                              variables)
     if success:
       return i, output
+
   raise Exception("no-firable-rule")
 
 
@@ -232,7 +268,9 @@ def from_raw_parameters(raw_parameters):
 
 
 """
-This procedure calls a teleo-reactive procedure and returns a list of actions.
+This procedure calls a teleo-reactive procedure
+and returns a list of actions and the variable substitutions (theta)
+
 program - the data structure describing the program to be called
 call - the name of the root TR procedure to be called
 parameters - a list of parameters to be passed to the procedure
@@ -240,7 +278,8 @@ max_dp - maximum number of times that procedures can recursively call each other
 dp - the current recursive depth
 """
 def call_procedure(program, call, parameters, belief_store,
-                   max_dp=10, dp=1):
+                   current_time, fired_rules, max_dp=10, dp=1):
+
   # call depth reached exception
   if dp > max_dp:
     raise Exception("call-depth-reached")
@@ -250,11 +289,50 @@ def call_procedure(program, call, parameters, belief_store,
                                               parameters)
 
   rules = procedures[call]['rules']
-  R, Theta = get_action(belief_store, rules, variables)
+
+  if len(fired_rules) > dp:
+    prev_fired_rule = fired_rules[dp - 1]
+  else:
+    prev_fired_rule = None
+
+  R, Theta = get_action(belief_store, rules,
+                        variables, current_time,
+                        prev_fired_rule=prev_fired_rule)
   A = rules[R]['actions']
   ATheta = [apply_substitution(a, Theta) for a in A]
 
+  fired_rule = { 'actions' : ATheta,
+                 'R' : R,
+                 'last_fired' : current_time,
+                 'dp' : dp}
 
+  new_fired_rules = copy.copy(fired_rules)
+
+  if len(fired_rules) > dp:
+    # a rule at the same depth in the stack
+    # has previously fired
+
+    prev_R = fired_rules[dp - 1]['R']
+    new_R = fired_rule['R']
+
+    prev_A = fired_rules[dp - 1]['actions']
+    new_A = fired_rule['actions']
+
+    new_fired_rules[dp - 1] = fired_rule
+
+    # if a different rule has been fired, then
+    # all rules from child procedure calls
+    # will have to be re-fired
+    if prev_R != new_R or prev_A != new_A:
+      # different rule
+      # remove rules that are lower in the stack
+      new_fired_rules = new_fired_rules[0:dp]
+
+  else:
+    # no rule at the same depth of the stack has fired previously
+    new_fired_rules.append(fired_rule)
+
+  # process the action side (body) of the rule
   if len(ATheta) == 1 and ATheta[0]['sort'] == 'proc_call':
     # the returned rule involves a procedure call
     new_call = ATheta[0]['name']
@@ -262,10 +340,11 @@ def call_procedure(program, call, parameters, belief_store,
     new_dp = dp + 1
 
     return call_procedure(program, new_call, new_parameters, belief_store,
+                          current_time, new_fired_rules,
                           max_dp=max_dp, dp=new_dp)
   else:
     # the returned rule consists of a list of actions
-    return A, Theta
+    return A, Theta, new_fired_rules
 
 
 """
@@ -298,17 +377,31 @@ def run(program, task_call, raw_parameters,
   # the set of actions called in the last cycle
   LActs = {}
 
+  # the rules that have been fired
+  fired_rules = []
+
+  # the start time of the program
+  start_time = time.time()
+  current_time = start_time
+
   # the main operation loop, run indefinitely
   while True:
+    current_time = time.time() - start_time
+
     # Prepare the BeliefStore.
     percepts = get_percepts(use_pedro, client=client)
     belief_store = percepts + remembered_beliefs
 
     # Get the actions that the robot must perform, as a result of calling
     # the procedure 'task_call' in 'program' with 'root_parameters'.
-    actions, variables = call_procedure(program, task_call, root_parameters,
-                                        belief_store, max_dp=1, dp=1)
+    actions, variables, new_fired_rules = call_procedure(program, task_call,
+                                                       root_parameters,
+                                                       belief_store,
+                                                       current_time,
+                                                       fired_rules,
+                                                       max_dp=10, dp=1)
     instantiated_actions = [apply_substitution(a, variables) for a in actions]
+    fired_rules = new_fired_rules
 
     # List of actions to send to the agent
     controls_to_send = []
@@ -356,6 +449,9 @@ if __name__ == "__main__":
   parser.add_argument('--server', dest="server_name", type=str, default="",
                       help='the name of the server')
 
+  parser.add_argument('--graph', dest="pcg_graph",
+                      action="store_true", default=False)
+
   args = parser.parse_args()
 
   # read the program file
@@ -363,20 +459,51 @@ if __name__ == "__main__":
   program_raw = program_file.read()
   program_file.close()
 
+  if PCG_AVAILABLE and args.pcg_graph:
+    config = Config()
+    config.trace_filter = GlobbingFilter(exclude=[
+      'pedroclient.*',
+      'Queue.*',
+      'threading.*',
+      'socket.*',
+      'pycallgraph.*'
+    ])
+
+    parsing_graph_output = GraphvizOutput()
+    parsing_graph_output.output_file = 'parsing_graph.png'
+
+    tr_graph_output = GraphvizOutput()
+    tr_graph_output.output_file = 'tr_graph.png'
+
   # parse the program's source code
   parsed_program = grammar.program.parseString(program_raw)
-  program = dsl.program_from_ast(parsed_program)
+
+  if PCG_AVAILABLE and args.pcg_graph:
+    with PyCallGraph(output=parsing_graph_output, config=config):
+      program = dsl.program_from_ast(parsed_program)
+  else:
+    program = dsl.program_from_ast(parsed_program)
+
 
   # the name of the task to be called
   task_call = args.task_call
 
+
   # parameters with which to call the first method
   parameters = args.params
+
 
   # pedro parameters
   shell_name = args.shell_name
   server_name = args.server_name
 
+
   # run the program
-  run(program, task_call, parameters,
-      use_pedro=True, shell_name=shell_name, server_name=server_name)
+  if PCG_AVAILABLE and args.pcg_graph:
+    with PyCallGraph(output=tr_graph_output, config=config):
+
+      run(program, task_call, parameters,
+          use_pedro=True, shell_name=shell_name, server_name=server_name)
+  else:
+    run(program, task_call, parameters,
+        use_pedro=True, shell_name=shell_name, server_name=server_name)

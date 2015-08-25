@@ -189,22 +189,30 @@ def get_action(belief_store, rules,
     prev_R = prev_firing['R']
     prev_rule = rules[prev_R]
 
+    # the while/until conditions can be expressed in terms of
+    # the variables that were instantiated by the corresponding guard query
+    # so the variable instantiation from the previous call is used
+    prev_variables = prev_firing['variables']
+
+    # time since the rule last fired with the guard inferable
     time_since_last_fire = (current_time - prev_firing['last_guard_fired'])
 
+    # evaluate the while conditions
     while_inferable = bs.evaluate_conditions(prev_rule['while_conditions'],
-                                             belief_store, variables)[0]
+                                             belief_store, prev_variables)[0]
     while_min_expired = time_since_last_fire > prev_rule['while_minimum']
 
     if while_inferable or not while_min_expired:
+      # evaluate the until conditions
       until_inferable = bs.evaluate_conditions(prev_rule['until_conditions'],
-                                             belief_store, variables)[0]
+                                             belief_store, prev_variables)[0]
       until_min_expired = time_since_last_fire > prev_rule['until_minimum']
 
       if not until_inferable or not until_min_expired:
         R = prev_R
-        Theta = prev_firing['variables']
+        Theta = variables
 
-        # don't bother checking guards
+        # don't bother checking guards later
         check_guards = False
 
         # rule found!
@@ -213,7 +221,7 @@ def get_action(belief_store, rules,
         # need to see if the guard is inferable, to check whether
         # 'last_guard_fired' should be updated
         guard_inferable = bs.evaluate_conditions(prev_rule['guard_conditions'],
-                                                 belief_store, variables)[0]
+                                                 belief_store, prev_variables)[0]
         if guard_inferable:
           last_guard_fired = current_time
         else:

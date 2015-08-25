@@ -6,9 +6,14 @@ built_in_signatures = {
   "forget" : {"percept_type" : "special_action", "type" : ["predicate"], "sort" : "action"}
 }
 
-"""
-DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS DO THIS 
-"""
+NOT_TRUE = {"sort" : "negation",
+            "predicate" : {"sort" : "predicate",
+                           "name" : "true",
+                           "terms" : []
+                         }
+          }
+
+
 def type_check(arg, expected_type, parameters):
   
   # primitive types
@@ -211,7 +216,7 @@ def rule_from_ast(ast, type_signatures, parameters):
   if "while_conditions" in ast:
     while_conditions = [cond_from_ast(cond, type_signatures, parameters) for cond in ast['while_conditions']]
   else:
-    while_conditions = []
+    while_conditions = [NOT_TRUE]
 
   if "while_minimum" in ast:
     while_minimum = integer_from_ast(ast['while_minimum'])
@@ -221,7 +226,7 @@ def rule_from_ast(ast, type_signatures, parameters):
   if "until_conditions" in ast:
     until_conditions = [cond_from_ast(cond, type_signatures, parameters) for cond in ast['until_conditions']]
   else:
-    until_conditions = []
+    until_conditions = [NOT_TRUE]
 
   if "until_minimum" in ast:
     until_minimum = integer_from_ast(ast['until_minimum'])

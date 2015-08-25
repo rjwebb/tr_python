@@ -110,8 +110,8 @@ a single TR rule,
 e.g.
 see(thing, 10) ~> move_forward
 """
-while_cond = Suppress("while") + list_of_conditions("while_conditions") + Optional(Suppress("min") + integer("while_minimum"))
-until_cond = Suppress("until") + list_of_conditions("until_conditions") + Optional(Suppress("min") + integer("until_minimum"))
+while_cond = Suppress("while") + list_of_conditions("while_conditions") + Optional(Suppress("min") + float_num("while_minimum"))
+until_cond = Suppress("until") + list_of_conditions("until_conditions") + Optional(Suppress("min") + float_num("until_minimum"))
 ruleLHS = list_of_conditions("guard_conditions") + Optional(while_cond) + Optional(until_cond)
 rule = Group(ruleLHS + Suppress("~>") + list_of_actions("actions"))("rule")
 rules = Group(OneOrMore(rule))

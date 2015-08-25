@@ -6,10 +6,6 @@ built_in_signatures = {
   "forget" : {"percept_type" : "special_action", "type" : ["predicate"], "sort" : "action"}
 }
 
-<<<<<<< HEAD
-
-def type_check(arg, expected_type, type_definitions, parameters):
-=======
 NOT_TRUE = {"sort" : "negation",
             "predicate" : {"sort" : "predicate",
                            "name" : "true",
@@ -18,9 +14,12 @@ NOT_TRUE = {"sort" : "negation",
           }
 
 
-def type_check(arg, expected_type, parameters):
-  
->>>>>>> 5608dc5d936d0cd27acd6ee20639c484991f3e64
+def type_check(arg, expected_type, type_definitions, parameters):
+  """
+  Check that a given thing "arg" is of a given type "expected_type"
+  type_definitions consists of the definitions for user-defined types
+  parameters is the variable instantiations
+  """
   # primitive types
   if expected_type == 'string':
     return (arg['sort'] == 'value' and arg['type'] == 'string') or arg['sort'] == 'variable'
@@ -66,7 +65,11 @@ def type_check(arg, expected_type, parameters):
 
 
 
-def type_check_args(args, expected_types, type_definitions, type_signatures, parameters):
+def type_check_args(args, expected_types, type_definitions, parameters):
+  """
+  check a list of arguments against a list of types
+
+  """
   if len(args) != len(expected_types):
     raise Exception("the number of arguments do not match: " + str(args) + ", " + str(expected_types))
   else:
@@ -251,7 +254,7 @@ def rule_from_ast(ast, type_definitions, type_signatures, parameters):
     while_conditions = [NOT_TRUE]
 
   if "while_minimum" in ast:
-    while_minimum = integer_from_ast(ast['while_minimum'])
+    while_minimum = float_from_ast(ast['while_minimum'])
   else:
     while_minimum = 0
 
@@ -261,7 +264,7 @@ def rule_from_ast(ast, type_definitions, type_signatures, parameters):
     until_conditions = [NOT_TRUE]
 
   if "until_minimum" in ast:
-    until_minimum = integer_from_ast(ast['until_minimum'])
+    until_minimum = float_from_ast(ast['until_minimum'])
   else:
     until_minimum = 0
 
@@ -341,7 +344,7 @@ def predicate_from_ast(ast, type_definitions, type_signatures, parameters):
     else:
       raise Exception("no type signature provided for "+name)
 
-    tc = type_check_args(args, expected_type, type_definitions, type_signatures, parameters)
+    tc = type_check_args(args, expected_type, type_definitions, parameters)
 
     if tc:
       # type check passes

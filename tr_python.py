@@ -46,8 +46,9 @@ def get_user_input_beliefs():
   beliefs = [pedroclient.PedroParser.parse(token) for token in a.split(",")]
   return [pedro_predicate_to_dict(b) for b in beliefs]
 
-
-
+"""
+Munges incoming beliefs from Pedro
+"""
 def process_pedro_beliefs(raw_message):
   p2pmsg = raw_message[0]
   message = p2pmsg.args[2]
@@ -178,14 +179,9 @@ def get_action(belief_store, rules,
                variables, current_time,
                prev_firing=None):
 
-
-  check_guards = True
   rule_found = False
-
   # evaluate while/until conditions
   if prev_firing:
-    some_conds = False
-
     prev_R = prev_firing['R']
     prev_rule = rules[prev_R]
 
@@ -212,16 +208,14 @@ def get_action(belief_store, rules,
         R = prev_R
         Theta = variables
 
-        # don't bother checking guards later
-        check_guards = False
-
         # rule found!
         rule_found = True
 
         # need to see if the guard is inferable, to check whether
         # 'last_guard_fired' should be updated
         guard_inferable = bs.evaluate_conditions(prev_rule['guard_conditions'],
-                                                 belief_store, prev_variables)[0]
+                                                 belief_store,
+                                                 prev_variables)[0]
         if guard_inferable:
           last_guard_fired = current_time
         else:
@@ -229,20 +223,22 @@ def get_action(belief_store, rules,
 
   # if no while/until conditions can be evaluated,
   # check guards in the normal way (like in TR)
-  if check_guards:
-    # otherwise check the guards of the rules
+  if not rule_found:
+    # otherwise find the first rule whose guard is inferable
+
     i = 0
-    success = False
-    while not success and i < len(rules):
+    guard_inferable = False
+    while not guard_inferable and i < len(rules):
       rule = rules[i]
-      success, output = bs.evaluate_conditions(rule['guard_conditions'],
-                                               belief_store,
-                                               variables)
+      a = bs.evaluate_conditions(rule['guard_conditions'],
+                                 belief_store,
+                                 variables)
+      guard_inferable, new_variables = a
       i += 1
 
-    if success:
+    if guard_inferable:
       R = i - 1
-      Theta = output
+      Theta = new_variables
       rule_found = True
       last_guard_fired = current_time
 
@@ -250,12 +246,12 @@ def get_action(belief_store, rules,
     A = rules[R]['actions']
     actions = [apply_substitution(a, Theta) for a in A]
 
-    fired_rule = { 'actions' : actions,
+    firing = { 'actions' : actions,
                    'R' : R,
                    'last_fired' : current_time,
                    'variables' : Theta,
                    'last_guard_fired' : last_guard_fired }
-    return fired_rule
+    return firing
   else:
     raise Exception("no-firable-rule")
 
@@ -465,7 +461,8 @@ def run(program, task_call, raw_parameters,
       percepts = get_percepts(use_pedro, client=client, wait=True)
     else:
       rec_percepts = get_percepts(use_pedro, client=client, wait=False)
-      # if there is a BS update, then update. otherwise continue with same ol' percepts
+      # if there is a BS update,
+      # then update. otherwise continue with same percepts
       if rec_percepts:
         percepts = rec_percepts
 
@@ -583,7 +580,9 @@ if __name__ == "__main__":
     with PyCallGraph(output=tr_graph_output, config=config):
 
       run(program, task_call, parameters,
-          use_pedro=True, shell_name=shell_name, server_name=server_name, update_mode=update_mode)
+          use_pedro=True, shell_name=shell_name,
+          server_name=server_name, update_mode=update_mode)
   else:
     run(program, task_call, parameters,
-        use_pedro=True, shell_name=shell_name, server_name=server_name, update_mode=update_mode)
+        use_pedro=True, shell_name=shell_name,
+        server_name=server_name, update_mode=update_mode)

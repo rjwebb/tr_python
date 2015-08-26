@@ -367,11 +367,6 @@ def call_procedure(program, call, parameters, belief_store,
   else:
     prev_firing = {}
 
-  """
-  R, Theta = get_action(belief_store, rules,
-                        variables, current_time,
-                        prev_firing=prev_firing)
-  """
   firing = get_action(belief_store, rules,
                       variables, current_time,
                       prev_firing=prev_firing)
@@ -489,7 +484,7 @@ def run(program, task_call, raw_parameters,
     fired_rules = new_fired_rules
 
     # List of actions to send to the agent
-    controls_to_send = []
+    CActs = []
 
     # Apply the 'remember' and 'forget' rules.
     for a in instantiated_actions:
@@ -504,10 +499,9 @@ def run(program, task_call, raw_parameters,
           remembered_beliefs.remove(t)
 
       else:
-        controls_to_send.append(a)
-
-    # Convert the actions to strings, to be sent to the agent
-    CActs = [predicate_to_string(a) for a in controls_to_send]
+        # Pedro will be sent a list of strings
+        a_str = predicate_to_string(a)
+        CActs.append(a_str)
 
     # Execute CActs.
     execute(CActs, LActs, use_pedro=True, \
@@ -582,13 +576,14 @@ if __name__ == "__main__":
   shell_name = args.shell_name
   server_name = args.server_name
 
+  update_mode = "wait"
 
   # run the program
   if PCG_AVAILABLE and args.pcg_graph:
     with PyCallGraph(output=tr_graph_output, config=config):
 
       run(program, task_call, parameters,
-          use_pedro=True, shell_name=shell_name, server_name=server_name)
+          use_pedro=True, shell_name=shell_name, server_name=server_name, update_mode=update_mode)
   else:
     run(program, task_call, parameters,
-        use_pedro=True, shell_name=shell_name, server_name=server_name)
+        use_pedro=True, shell_name=shell_name, server_name=server_name, update_mode=update_mode)

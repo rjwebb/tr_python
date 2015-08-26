@@ -362,27 +362,22 @@ def call_procedure(program, call, parameters, belief_store,
 
   rules = procedures[call]['rules']
 
-  if len(fired_rules) > dp:
-    prev_firing = fired_rules[dp - 1]
-  else:
-    prev_firing = {}
-
-  firing = get_action(belief_store, rules,
-                      variables, current_time,
-                      prev_firing=prev_firing)
-
-
   new_fired_rules = copy.copy(fired_rules)
 
   # refiring/continuation stuff
   if len(fired_rules) > dp:
     # a rule at the same depth in the stack
     # has previously fired
+    prev_firing = fired_rules[dp - 1]
 
-    prev_R = fired_rules[dp - 1]['R']
+    firing = get_action(belief_store, rules,
+                        variables, current_time,
+                        prev_firing=prev_firing)
+
+    prev_R = prev_firing['R']
     new_R = firing['R']
 
-    prev_A = fired_rules[dp - 1]['actions']
+    prev_A = prev_firing['actions']
     new_A = firing['actions']
 
     new_fired_rules[dp - 1] = firing
@@ -391,12 +386,15 @@ def call_procedure(program, call, parameters, belief_store,
     # all rules from child procedure calls
     # will have to be re-fired
     if prev_R != new_R or prev_A != new_A:
-      # different rule
-      # remove rules that are lower in the stack
       new_fired_rules = new_fired_rules[0:dp]
 
   else:
     # no rule at the same depth of the stack has fired previously
+    prev_firing = {}
+    firing = get_action(belief_store, rules,
+                        variables, current_time,
+                        prev_firing=prev_firing)
+
     new_fired_rules.append(firing)
 
   # process the action side (body) of the rule
@@ -408,9 +406,11 @@ def call_procedure(program, call, parameters, belief_store,
     new_parameters = actions[0]['terms']
     new_dp = dp + 1
 
+    # call that procedure
     return call_procedure(program, new_call, new_parameters, belief_store,
                           current_time, new_fired_rules,
                           max_dp=max_dp, dp=new_dp)
+
   else:
     # the returned rule consists of a list of actions
     return firing, new_fired_rules

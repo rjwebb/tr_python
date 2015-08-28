@@ -13,6 +13,8 @@ NOT_TRUE = {"sort" : "negation",
                          }
           }
 
+ACTION_TYPES = ['durative', 'discrete', 'special_action']
+PERCEPT_TYPES = ['percept', 'belief']
 
 def type_check(arg, expected_type, type_definitions, parameters):
   """
@@ -207,9 +209,11 @@ def type_signatures_from_ast(ast):
           t = []
 
         ptype = a['percept_type']
-        if ptype in ['durative', 'discrete', 'special_action']:
+        if ptype in ACTION_TYPES:
+          # action
           psort = 'action'
-        elif ptype in ['percept', 'belief']:
+        elif ptype in PERCEPT_TYPES:
+          # percept
           psort = 'percept'
         else:
           raise Exception("unrecognised percept type")
@@ -310,7 +314,8 @@ def action_from_ast(ast, type_definitions, type_signatures, parameters):
     return {}
 
   elif "head" in ast.keys(): #it is a predicate
-    head_sort = type_signatures[ast['head']]['sort']
+    sig = type_signatures[ast['head']]
+    head_sort = sig['sort']
 
     if head_sort == 'procedure':
       # it's a procedure call
@@ -322,6 +327,8 @@ def action_from_ast(ast, type_definitions, type_signatures, parameters):
       # it's an action
       p = predicate_from_ast(ast, type_definitions, type_signatures, parameters)
       p['sort'] = "action"
+      print p
+      p['action_type'] = sig['percept_type']
       return p
 
     elif head_sort == 'percept':

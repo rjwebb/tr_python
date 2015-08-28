@@ -137,7 +137,11 @@ the mapping from variable names to values in  in 'variables'
 def apply_substitution(A, variables):
   if A["sort"] in ["predicate", "action", "proc_call"]:
     new_terms = [apply_substitution(a, variables) for a in A["terms"]]
-    return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
+    if 'action_type' in A.keys():
+      return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"],
+              'action_type' : A['action_type']}
+    else:
+      return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
   elif A["sort"] == "variable":
     if A["name"] in variables:
       return variables[A["name"]]
@@ -159,10 +163,19 @@ def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
   if use_pedro:
     for a in LActs:
       if a not in CActs:
-        cmds.append("stop_("+a+")")
+        a_parsed = predicate_to_string(a)
+        cmds.append("stop_("+a_parsed+")")
+
     for a in CActs:
-      if a not in LActs:
-        cmds.append("start_("+a+")")
+      if a['action_type'] == 'durative':
+        if a not in LActs:
+          a_parsed = predicate_to_string(a)
+          cmds.append("start_("+a_parsed+")")
+      elif a['action_type'] == 'discrete':
+        a_parsed = predicate_to_string(a)
+        cmds.append("do_("+a_parsed+")")
+      else:
+        raise Exception("unrecognised action type "+str(a))
 
     if len(cmds) > 0:
       cmd = "controls(["+",".join(cmds)+"])"
@@ -496,9 +509,7 @@ def run(program, task_call, raw_parameters,
           remembered_beliefs.remove(t)
 
       else:
-        # Pedro will be sent a list of strings
-        a_str = predicate_to_string(a)
-        CActs.append(a_str)
+        CActs.append(a)
 
     # Execute CActs.
     execute(CActs, LActs, use_pedro=True, \

@@ -204,35 +204,25 @@ def get_action(belief_store, rules,
     prev_variables = prev_firing['variables']
 
     # time since the rule last fired with the guard inferable
-    time_since_last_fire = (current_time - prev_firing['last_guard_fired'])
+    time_since_first_fire = (current_time - prev_firing['first_fired'])
 
     # evaluate the while conditions
     while_inferable = bs.evaluate_conditions(prev_rule['while_conditions'],
                                              belief_store, prev_variables)[0]
-    while_min_expired = time_since_last_fire > prev_rule['while_minimum']
+    while_min_expired = time_since_first_fire > prev_rule['while_minimum']
 
     if while_inferable or not while_min_expired:
       # evaluate the until conditions
       until_inferable = bs.evaluate_conditions(prev_rule['until_conditions'],
                                              belief_store, prev_variables)[0]
-      until_min_expired = time_since_last_fire > prev_rule['until_minimum']
+      until_min_expired = time_since_first_fire > prev_rule['until_minimum']
 
       if not until_inferable or not until_min_expired:
         R = prev_R
         Theta = variables
-
         # rule found!
         rule_found = True
-
-        # need to see if the guard is inferable, to check whether
-        # 'last_guard_fired' should be updated
-        guard_inferable = bs.evaluate_conditions(prev_rule['guard_conditions'],
-                                                 belief_store,
-                                                 prev_variables)[0]
-        if guard_inferable:
-          last_guard_fired = current_time
-        else:
-          last_guard_fired = prev_firing['last_guard_fired']
+        first_fired = prev_firing["first_fired"]
 
   # if no while/until conditions can be evaluated,
   # check guards in the normal way (like in TR)
@@ -253,17 +243,16 @@ def get_action(belief_store, rules,
       R = i - 1
       Theta = new_variables
       rule_found = True
-      last_guard_fired = current_time
+      first_fired = current_time
 
   if rule_found:
     A = rules[R]['actions']
     actions = [apply_substitution(a, Theta) for a in A]
-
     firing = { 'actions' : actions,
-                   'R' : R,
-                   'last_fired' : current_time,
-                   'variables' : Theta,
-                   'last_guard_fired' : last_guard_fired }
+               'R' : R,
+               'last_fired' : current_time,
+               'variables' : Theta,
+               'first_fired' : first_fired}
     return firing
   else:
     raise Exception("no-firable-rule")

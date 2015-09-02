@@ -153,6 +153,7 @@ def apply_substitution(A, variables):
     raise Exception("what is "+ str(A) + " ?")
 
 
+
 """
 Execute the actions contained in CActs.
 Knowledge of the previously fired actions (LActs) is required.
@@ -443,7 +444,7 @@ def run(program, task_call, raw_parameters,
   remembered_beliefs = []
 
   # the set of actions called in the last cycle
-  LActs = {}
+  LActs = []
 
   # the rules that have been fired
   fired_rules = []

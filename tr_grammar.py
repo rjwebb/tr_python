@@ -102,7 +102,7 @@ binary_condition = Group(expression("arg1") + binary_comparison("operator") + ex
 """
 the LHS of the rule is a list of conditions, which are either predicates, negated predicates or binary comparison conditions
 """
-list_of_conditions = Group(delimitedList(( binary_condition | Group(Literal("not") + predicate("negation")) | predicate ), delim="&"))
+list_of_conditions = Group(delimitedList(( binary_condition("binary_condition") | Group(Literal("not") + predicate("negation")) | predicate ), delim="&"))
 
 
 """

@@ -1,0 +1,20 @@
+thing ::= asteroid | something
+
+direction ::= left | right | centre | dead_centre
+
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+discrete shoot : ()
+
+percept facing_direction : (num),
+        see : (thing, direction, num),
+	speed : (num)
+
+proc2 : () ~>
+proc2(){
+true ~> move_forward
+}

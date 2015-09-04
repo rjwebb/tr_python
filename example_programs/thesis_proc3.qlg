@@ -1,0 +1,30 @@
+thing ::= asteroid | something
+
+direction ::= left | right | centre | dead_centre
+
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+discrete shoot : ()
+
+percept facing_direction : (num),
+        see : (thing, direction, num),
+	speed : (num)
+
+proc3 : () ~>
+proc3(){
+see(asteroid, left, D) ~> inner_proc(D)
+see(asteroid, right, D) ~> inner_proc(D)
+true ~> move_forward
+}
+
+inner_proc : (num) ~>
+inner_proc(D){
+see(asteroid, left, D2) & D2 < D ~> inner_proc(D2)
+see(asteroid, right, D2) & D2 < D ~> inner_proc(D2)
+see(asteroid, left, D2) & D2 == D ~> turn_left, shoot
+see(asteroid, right, D2) & D2 == D ~> turn_right, shoot
+}

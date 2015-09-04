@@ -46,8 +46,9 @@ def get_user_input_beliefs():
   beliefs = [pedroclient.PedroParser.parse(token) for token in a.split(",")]
   return [pedro_predicate_to_dict(b) for b in beliefs]
 
-
-
+"""
+Munges incoming beliefs from Pedro
+"""
 def process_pedro_beliefs(raw_message):
   p2pmsg = raw_message[0]
   message = p2pmsg.args[2]
@@ -136,7 +137,11 @@ the mapping from variable names to values in  in 'variables'
 def apply_substitution(A, variables):
   if A["sort"] in ["predicate", "action", "proc_call"]:
     new_terms = [apply_substitution(a, variables) for a in A["terms"]]
-    return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
+    if 'action_type' in A.keys():
+      return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"],
+              'action_type' : A['action_type']}
+    else:
+      return {"name" : A["name"], "terms": new_terms, "sort" : A["sort"]}
   elif A["sort"] == "variable":
     if A["name"] in variables:
       return variables[A["name"]]
@@ -146,6 +151,7 @@ def apply_substitution(A, variables):
     return A
   else:
     raise Exception("what is "+ str(A) + " ?")
+
 
 
 """
@@ -158,10 +164,19 @@ def execute(CActs, LActs, use_pedro=False, client=None, server_name=None):
   if use_pedro:
     for a in LActs:
       if a not in CActs:
-        cmds.append("stop_("+a+")")
+        a_parsed = predicate_to_string(a)
+        cmds.append("stop_("+a_parsed+")")
+
     for a in CActs:
-      if a not in LActs:
-        cmds.append("start_("+a+")")
+      if a['action_type'] == 'durative':
+        if a not in LActs:
+          a_parsed = predicate_to_string(a)
+          cmds.append("start_("+a_parsed+")")
+      elif a['action_type'] == 'discrete':
+        a_parsed = predicate_to_string(a)
+        cmds.append("do_("+a_parsed+")")
+      else:
+        raise Exception("unrecognised action type "+str(a))
 
     if len(cmds) > 0:
       cmd = "controls(["+",".join(cmds)+"])"
@@ -178,14 +193,9 @@ def get_action(belief_store, rules,
                variables, current_time,
                prev_firing=None):
 
-
-  check_guards = True
   rule_found = False
-
   # evaluate while/until conditions
   if prev_firing:
-    some_conds = False
-
     prev_R = prev_firing['R']
     prev_rule = rules[prev_R]
 
@@ -195,67 +205,56 @@ def get_action(belief_store, rules,
     prev_variables = prev_firing['variables']
 
     # time since the rule last fired with the guard inferable
-    time_since_last_fire = (current_time - prev_firing['last_guard_fired'])
+    time_since_first_fire = (current_time - prev_firing['first_fired'])
 
     # evaluate the while conditions
     while_inferable = bs.evaluate_conditions(prev_rule['while_conditions'],
                                              belief_store, prev_variables)[0]
-    while_min_expired = time_since_last_fire > prev_rule['while_minimum']
+    while_min_expired = time_since_first_fire > prev_rule['while_minimum']
 
     if while_inferable or not while_min_expired:
       # evaluate the until conditions
       until_inferable = bs.evaluate_conditions(prev_rule['until_conditions'],
                                              belief_store, prev_variables)[0]
-      until_min_expired = time_since_last_fire > prev_rule['until_minimum']
+      until_min_expired = time_since_first_fire > prev_rule['until_minimum']
 
       if not until_inferable or not until_min_expired:
         R = prev_R
         Theta = variables
-
-        # don't bother checking guards later
-        check_guards = False
-
         # rule found!
         rule_found = True
-
-        # need to see if the guard is inferable, to check whether
-        # 'last_guard_fired' should be updated
-        guard_inferable = bs.evaluate_conditions(prev_rule['guard_conditions'],
-                                                 belief_store, prev_variables)[0]
-        if guard_inferable:
-          last_guard_fired = current_time
-        else:
-          last_guard_fired = prev_firing['last_guard_fired']
+        first_fired = prev_firing["first_fired"]
 
   # if no while/until conditions can be evaluated,
   # check guards in the normal way (like in TR)
-  if check_guards:
-    # otherwise check the guards of the rules
+  if not rule_found:
+    # otherwise find the first rule whose guard is inferable
+
     i = 0
-    success = False
-    while not success and i < len(rules):
+    guard_inferable = False
+    while not guard_inferable and i < len(rules):
       rule = rules[i]
-      success, output = bs.evaluate_conditions(rule['guard_conditions'],
-                                               belief_store,
-                                               variables)
+      a = bs.evaluate_conditions(rule['guard_conditions'],
+                                 belief_store,
+                                 variables)
+      guard_inferable, new_variables = a
       i += 1
 
-    if success:
+    if guard_inferable:
       R = i - 1
-      Theta = output
+      Theta = new_variables
       rule_found = True
-      last_guard_fired = current_time
+      first_fired = current_time
 
   if rule_found:
     A = rules[R]['actions']
     actions = [apply_substitution(a, Theta) for a in A]
-
-    fired_rule = { 'actions' : actions,
-                   'R' : R,
-                   'last_fired' : current_time,
-                   'variables' : Theta,
-                   'last_guard_fired' : last_guard_fired }
-    return fired_rule
+    firing = { 'actions' : actions,
+               'R' : R,
+               'last_fired' : current_time,
+               'variables' : Theta,
+               'first_fired' : first_fired}
+    return firing
   else:
     raise Exception("no-firable-rule")
 
@@ -362,32 +361,22 @@ def call_procedure(program, call, parameters, belief_store,
 
   rules = procedures[call]['rules']
 
-  if len(fired_rules) > dp:
-    prev_firing = fired_rules[dp - 1]
-  else:
-    prev_firing = {}
-
-  """
-  R, Theta = get_action(belief_store, rules,
-                        variables, current_time,
-                        prev_firing=prev_firing)
-  """
-  firing = get_action(belief_store, rules,
-                      variables, current_time,
-                      prev_firing=prev_firing)
-
-
   new_fired_rules = copy.copy(fired_rules)
 
   # refiring/continuation stuff
   if len(fired_rules) > dp:
     # a rule at the same depth in the stack
     # has previously fired
+    prev_firing = fired_rules[dp - 1]
 
-    prev_R = fired_rules[dp - 1]['R']
+    firing = get_action(belief_store, rules,
+                        variables, current_time,
+                        prev_firing=prev_firing)
+
+    prev_R = prev_firing['R']
     new_R = firing['R']
 
-    prev_A = fired_rules[dp - 1]['actions']
+    prev_A = prev_firing['actions']
     new_A = firing['actions']
 
     new_fired_rules[dp - 1] = firing
@@ -396,12 +385,15 @@ def call_procedure(program, call, parameters, belief_store,
     # all rules from child procedure calls
     # will have to be re-fired
     if prev_R != new_R or prev_A != new_A:
-      # different rule
-      # remove rules that are lower in the stack
       new_fired_rules = new_fired_rules[0:dp]
 
   else:
     # no rule at the same depth of the stack has fired previously
+    prev_firing = {}
+    firing = get_action(belief_store, rules,
+                        variables, current_time,
+                        prev_firing=prev_firing)
+
     new_fired_rules.append(firing)
 
   # process the action side (body) of the rule
@@ -413,9 +405,11 @@ def call_procedure(program, call, parameters, belief_store,
     new_parameters = actions[0]['terms']
     new_dp = dp + 1
 
+    # call that procedure
     return call_procedure(program, new_call, new_parameters, belief_store,
                           current_time, new_fired_rules,
                           max_dp=max_dp, dp=new_dp)
+
   else:
     # the returned rule consists of a list of actions
     return firing, new_fired_rules
@@ -450,7 +444,7 @@ def run(program, task_call, raw_parameters,
   remembered_beliefs = []
 
   # the set of actions called in the last cycle
-  LActs = {}
+  LActs = []
 
   # the rules that have been fired
   fired_rules = []
@@ -470,7 +464,8 @@ def run(program, task_call, raw_parameters,
       percepts = get_percepts(use_pedro, client=client, wait=True)
     else:
       rec_percepts = get_percepts(use_pedro, client=client, wait=False)
-      # if there is a BS update, then update. otherwise continue with same ol' percepts
+      # if there is a BS update,
+      # then update. otherwise continue with same percepts
       if rec_percepts:
         percepts = rec_percepts
 
@@ -489,7 +484,7 @@ def run(program, task_call, raw_parameters,
     fired_rules = new_fired_rules
 
     # List of actions to send to the agent
-    controls_to_send = []
+    CActs = []
 
     # Apply the 'remember' and 'forget' rules.
     for a in instantiated_actions:
@@ -504,10 +499,7 @@ def run(program, task_call, raw_parameters,
           remembered_beliefs.remove(t)
 
       else:
-        controls_to_send.append(a)
-
-    # Convert the actions to strings, to be sent to the agent
-    CActs = [predicate_to_string(a) for a in controls_to_send]
+        CActs.append(a)
 
     # Execute CActs.
     execute(CActs, LActs, use_pedro=True, \
@@ -582,13 +574,16 @@ if __name__ == "__main__":
   shell_name = args.shell_name
   server_name = args.server_name
 
+  update_mode = "wait"
 
   # run the program
   if PCG_AVAILABLE and args.pcg_graph:
     with PyCallGraph(output=tr_graph_output, config=config):
 
       run(program, task_call, parameters,
-          use_pedro=True, shell_name=shell_name, server_name=server_name)
+          use_pedro=True, shell_name=shell_name,
+          server_name=server_name, update_mode=update_mode)
   else:
     run(program, task_call, parameters,
-        use_pedro=True, shell_name=shell_name, server_name=server_name)
+        use_pedro=True, shell_name=shell_name,
+        server_name=server_name, update_mode=update_mode)

@@ -6,9 +6,8 @@ durative turn_right : (),
          turn_left : (),
          move_forward : (),
          move_backward : (),
-         nothing : ()
-
-discrete shoot : ()
+         nothing : (),
+	 shoot : ()
 
 percept facing_direction : (num),
         see : (thing, direction, num),

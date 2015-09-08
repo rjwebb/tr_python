@@ -208,13 +208,13 @@ def get_action(belief_store, rules,
     time_since_first_fire = (current_time - prev_firing['first_fired'])
 
     # evaluate the while conditions
-    while_inferable = bs.evaluate_conditions(prev_rule['while_conditions'],
+    while_inferable = bs.evaluate_condition_tree(prev_rule['while_conditions'],
                                              belief_store, prev_variables)[0]
     while_min_expired = time_since_first_fire > prev_rule['while_minimum']
 
     if while_inferable or not while_min_expired:
       # evaluate the until conditions
-      until_inferable = bs.evaluate_conditions(prev_rule['until_conditions'],
+      until_inferable = bs.evaluate_condition_tree(prev_rule['until_conditions'],
                                              belief_store, prev_variables)[0]
       until_min_expired = time_since_first_fire > prev_rule['until_minimum']
 
@@ -234,7 +234,7 @@ def get_action(belief_store, rules,
     guard_inferable = False
     while not guard_inferable and i < len(rules):
       rule = rules[i]
-      a = bs.evaluate_conditions(rule['guard_conditions'],
+      a = bs.evaluate_condition_tree(rule['guard_conditions'],
                                  belief_store,
                                  variables)
       guard_inferable, new_variables = a
@@ -560,7 +560,6 @@ if __name__ == "__main__":
       program = dsl.program_from_ast(parsed_program)
   else:
     program = dsl.program_from_ast(parsed_program)
-
 
   # the name of the task to be called
   task_call = args.task_call

@@ -65,7 +65,7 @@ type_signature = Group(percept_type("percept_type")  + Group(list_of_type_decs)(
 a predicate is defined recursively, hence the Forward() rule
 """
 predicate = Forward()
-predicate << ( Group(lcName("head") + Optional(Suppress("(")+ Group(delimitedList(predicate))('args') + Suppress(")")))("predicate") | Group(varName("variable")) | Group(float_num("float")) | Group(integer("integer")) | Group(string_value("string")) )
+predicate << (~Literal("not") + Group(lcName("head") + Optional(Suppress("(")+ Group(delimitedList(predicate))('args') + Suppress(")")))("predicate") | Group(varName("variable")) | Group(float_num("float")) | Group(integer("integer")) | Group(string_value("string")) )
 
 
 """
@@ -102,8 +102,13 @@ binary_condition = Group(expression("arg1") + binary_comparison("operator") + ex
 """
 the LHS of the rule is a list of conditions, which are either predicates, negated predicates or binary comparison conditions
 """
-list_of_conditions = Group(delimitedList(( binary_condition("binary_condition") | Group(Literal("not") + predicate("negation")) | predicate ), delim="&"))
 
+condition = binary_condition("binary_condition") | predicate
+list_of_conditions = infixNotation(condition,
+                                   [
+                                       (Literal("not")("negation"), 1, opAssoc.RIGHT),
+                                       (Literal("&")("conjunction"), 2, opAssoc.LEFT)
+                                   ])
 
 """
 a single TR rule,

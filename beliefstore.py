@@ -28,38 +28,14 @@ def merge_dicts(*dict_args):
   return result
 
 
-def evaluate_conditions(conds, belief_store, variables):
-  """
-  Evaluate a list of conditions (queries).
-  It returns the first variable instantiation it finds that satisfies the query.
 
-  conds -- the list of conditions (predicates) to be queried
-  belief_store -- the set of percepts (facts) to query over
-  variables -- (partial) instantiation of the variables in the conditions
-  """
+def evaluate_condition_tree(condition, belief_store, variables):
+  success, substitutions = eval_condition(condition, belief_store, variables)
 
-  if conds == []:
-    return True, variables
+  if success:
+    return True, substitutions[0]
   else:
-    cond = conds[0]
-    success, substitutions = eval_condition(cond, belief_store, variables)
-
-    if success:
-      i = 0
-      done = False
-      while i < len(substitutions) and not done:
-        updated_variables = merge_dicts(variables, substitutions[i])
-        success2, variables2 = evaluate_conditions(conds[1:], belief_store, updated_variables)
-        if success2:
-          done = True
-        i += 1
-      if done:
-        return True, variables2
-      else:
-        return False, None
-    else:
-      return False, None
-
+    return False, None
 
 def eval_condition(cond, belief_store, variables):
   """
@@ -70,8 +46,10 @@ def eval_condition(cond, belief_store, variables):
   variables -- (partial) instantiation of the variables in the conditions
   """
 
+  if cond['sort'] == 'conjunction':
+    return evaluate_conjunction(cond, belief_store, variables)
   # the condition is a negation-as-failure
-  if cond['sort'] == 'negation':
+  elif cond['sort'] == 'negation':
     return evaluate_negation(cond, belief_store, variables)
 
   # the condition is a predicate
@@ -82,7 +60,7 @@ def eval_condition(cond, belief_store, variables):
     else:
       results = [pattern_match(cond, e, variables) for e in belief_store]
       substitutions = [output for (success, output) in results if success]
-
+      print cond, substitutions
       if len(substitutions) > 0:
         return True, substitutions
       else:
@@ -91,7 +69,6 @@ def eval_condition(cond, belief_store, variables):
   # the condition is a binary condition (e.g. 3 > 2, X <= 1)
   elif cond['sort'] == "binary_condition":
     comp = evaluate_binary_comparison(cond, variables)
-
     if comp:
       return True, [variables]
     else:
@@ -103,6 +80,30 @@ def eval_condition(cond, belief_store, variables):
     return False, None
 
 
+def evaluate_conjunction(cond, belief_store, variables):
+  cond_left = cond['left']
+  cond_right = cond['right']
+
+  success, substitutions = eval_condition(cond_left, belief_store, variables)
+  if success:
+    output_variables = []
+
+    for subst in substitutions:
+      updated_variables = merge_dicts(variables, subst)
+      success2, variables2 = eval_condition(cond_right, belief_store, updated_variables)
+      if success2:
+        output_variables.extend(variables2)
+
+    if len(output_variables) > 0:
+      return True, output_variables
+    else:
+      return False, None
+  else:
+    return False, None
+
+
+
+
 def evaluate_negation(cond, belief_store, variables):
   """
   Evaluates a negation as failure condition
@@ -110,7 +111,6 @@ def evaluate_negation(cond, belief_store, variables):
 
   inner_cond = cond['predicate']
   success, substitutions = eval_condition(inner_cond, belief_store, variables)
-
   if not success:
     return True, [variables]
   else:

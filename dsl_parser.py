@@ -254,12 +254,12 @@ def procedure_from_ast(procedure_ast, type_definitions, type_signatures):
 
 
 def rule_from_ast(ast, type_definitions, type_signatures, parameters):
-  guard_conditions = [cond_from_ast(cond, type_definitions, type_signatures, parameters) for cond in ast['guard_conditions']]
+  guard_conditions = cond_from_ast(ast['guard_conditions'], type_definitions, type_signatures, parameters)
 
   if "while_conditions" in ast:
-    while_conditions = [cond_from_ast(cond, type_definitions, type_signatures, parameters) for cond in ast['while_conditions']]
+    while_conditions = cond_from_ast(ast['while_conditions'], type_definitions, type_signatures, parameters)
   else:
-    while_conditions = [NOT_TRUE]
+    while_conditions = NOT_TRUE
 
   if "while_minimum" in ast:
     while_minimum = float_from_ast(ast['while_minimum'])
@@ -267,9 +267,9 @@ def rule_from_ast(ast, type_definitions, type_signatures, parameters):
     while_minimum = 0
 
   if "until_conditions" in ast:
-    until_conditions = [cond_from_ast(cond, type_definitions, type_signatures, parameters) for cond in ast['until_conditions']]
+    until_conditions = cond_from_ast(ast['until_conditions'], type_definitions, type_signatures, parameters)
   else:
-    until_conditions = [NOT_TRUE]
+    until_conditions = NOT_TRUE
 
   if "until_minimum" in ast:
     until_minimum = float_from_ast(ast['until_minimum'])
@@ -290,9 +290,18 @@ def rule_from_ast(ast, type_definitions, type_signatures, parameters):
 
 
 def cond_from_ast(ast, type_definitions, type_signatures, parameters):
-  if "negation" in ast.keys():
-    # it's a negation of a predicate
-    inner_predicate = cond_from_ast(ast['negation'], type_definitions, type_signatures, parameters)
+  if "conjunction" in ast.keys():
+    ast_left = ast[0]
+    ast_right = ast[2]
+    pred_left = cond_from_ast(ast_left, type_definitions, type_signatures, parameters)
+    pred_right = cond_from_ast(ast_right, type_definitions, type_signatures, parameters)
+
+    return { "sort" : "conjunction", "left" : pred_left, "right" : pred_right }
+
+  elif "negation" in ast.keys():
+    # it's a negation of some conditions
+    inner_ast = ast[1]
+    inner_predicate = cond_from_ast(inner_ast, type_definitions, type_signatures, parameters)
     return {"sort" : "negation", "predicate" : inner_predicate}
 
   elif "head" in ast.keys():
@@ -327,7 +336,6 @@ def action_from_ast(ast, type_definitions, type_signatures, parameters):
       # it's an action
       p = predicate_from_ast(ast, type_definitions, type_signatures, parameters)
       p['sort'] = "action"
-      print p
       p['action_type'] = sig['percept_type']
       return p
 

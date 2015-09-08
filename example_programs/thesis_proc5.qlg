@@ -1,0 +1,22 @@
+thing ::= asteroid | something
+
+direction ::= left | right | centre | dead_centre
+
+durative turn_right : (),
+         turn_left : (),
+         move_forward : (),
+         move_backward : (),
+         nothing : ()
+
+durative shoot : ()
+
+percept facing_direction : (num),
+        see : (thing, direction, num),
+	speed : (num)
+
+proc5 : () ~>
+proc5(){
+see(asteroid, left, D) & not (see(asteroid,right,D2) & D2 < D) ~> turn_left, shoot
+see(asteroid, right, D) & not (see(asteroid,left,D2) & D2 < D) ~> turn_right, shoot
+true ~> move_forward
+}
